@@ -2,10 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
 import {
   GeminiEmbedder,
   GeminiChatModel,
   FsObjectStore,
+  SupabaseObjectStore,
   SimpleUrlFetcher,
   PgVectorStore,
 } from '@dialogos-forge/core';
@@ -18,7 +20,12 @@ const rootDir = path.resolve(__dirname, '../../..');
 
 dotenv.config({ path: path.join(rootDir, '.env') });
 
+const authMode = (process.env.AUTH_MODE || 'dev').toLowerCase();
+const storageMode = (process.env.STORAGE_MODE || 'local').toLowerCase();
+
 export const env = {
+  authMode: authMode === 'supabase' ? 'supabase' : 'dev',
+  storageMode: storageMode === 'supabase' ? 'supabase' : 'local',
   geminiApiKey: process.env.GEMINI_API_KEY || '',
   geminiEmbedModel: process.env.GEMINI_EMBED_MODEL || 'gemini-embedding-001',
   geminiChatModel: process.env.GEMINI_CHAT_MODEL || 'gemini-flash-lite-latest',
@@ -32,26 +39,51 @@ export const env = {
     /\/$/,
     ''
   ),
+  supabaseUrl: (process.env.SUPABASE_URL || '').replace(/\/$/, ''),
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+  supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET || 'conversastudio',
 };
+
+if (env.authMode === 'supabase' && !env.supabaseUrl) {
+  console.warn('[config] AUTH_MODE=supabase but SUPABASE_URL is missing');
+}
+if (env.storageMode === 'supabase' && (!env.supabaseUrl || !env.supabaseServiceRoleKey)) {
+  console.warn('[config] STORAGE_MODE=supabase but Supabase credentials are missing');
+}
 
 fs.mkdirSync(env.uploadDir, { recursive: true });
 
 /** @type {import('pg').Pool | Awaited<ReturnType<typeof createPool>>} */
 export let pool;
 
-export const objectStore = new FsObjectStore({
-  rootDir: env.uploadDir,
-  publicBaseUrl: env.publicApiUrl,
-});
+export let objectStore;
 
 export let vectorStore;
 export const urlFetcher = new SimpleUrlFetcher();
+
+function createObjectStore() {
+  if (env.storageMode === 'supabase') {
+    const client = createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    return new SupabaseObjectStore({
+      client,
+      bucket: env.supabaseStorageBucket,
+      publicBaseUrl: env.supabaseUrl,
+    });
+  }
+  return new FsObjectStore({
+    rootDir: env.uploadDir,
+    publicBaseUrl: env.publicApiUrl,
+  });
+}
 
 export async function initDb() {
   pool = await createPool(env.databaseUrl);
   await runMigrations(pool, { log: (msg) => console.log(msg) });
   await recoverStaleBuildJobs(pool);
   vectorStore = new PgVectorStore({ pool });
+  objectStore = createObjectStore();
   return pool;
 }
 
@@ -60,6 +92,7 @@ export async function closeDb() {
     await pool.end?.();
     pool = null;
     vectorStore = null;
+    objectStore = null;
   }
 }
 

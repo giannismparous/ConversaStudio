@@ -5,6 +5,7 @@ export * from './domain/uiLocalize.js';
 export * from './domain/defaults.js';
 export { GeminiEmbedder, GeminiChatModel } from './adapters/gemini.js';
 export { FsObjectStore } from './adapters/fsObjectStore.js';
+export { SupabaseObjectStore } from './adapters/supabaseObjectStore.js';
 export { SimpleUrlFetcher } from './adapters/urlFetcher.js';
 export { closeBrowser } from './adapters/browserRender.js';
 export { PgVectorStore } from './adapters/pgVectorStore.js';

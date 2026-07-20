@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: conversastudio-api
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AUTH_MODE
+        value: supabase
+      - key: STORAGE_MODE
+        value: supabase
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: API_PORT
+        value: 8787
+      - key: GEMINI_EMBED_MODEL
+        value: gemini-embedding-001
+      - key: GEMINI_CHAT_MODEL
+        value: gemini-flash-lite-latest
+      - key: GEMINI_EMBED_DIMS
+        value: "768"
+      - key: SUPABASE_STORAGE_BUCKET
+        value: conversastudio
+      # Set these in the Render dashboard (sync: false):
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: PUBLIC_API_URL
+        sync: false

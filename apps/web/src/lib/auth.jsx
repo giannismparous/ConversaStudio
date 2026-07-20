@@ -1,16 +1,42 @@
-import React, { createContext, useContext, useMemo, useState, useEffect, useCallback } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  useEffect,
+  useCallback,
+} from 'react';
 import { api } from './api.js';
+import { setApiAuth } from './apiAuth.js';
+import { isSupabaseAuth } from './authMode.js';
+import { assertSupabaseClient } from './supabase.js';
 
 const AuthContext = createContext(null);
 const STORAGE_KEY = 'df_username';
 
+async function fetchMe({ username, token }) {
+  return api('/auth/me', { username, token });
+}
+
 export function AuthProvider({ children }) {
-  const [username, setUsername] = useState(() => localStorage.getItem(STORAGE_KEY) || '');
+  const [username, setUsername] = useState(() =>
+    isSupabaseAuth ? '' : localStorage.getItem(STORAGE_KEY) || ''
+  );
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [accessToken, setAccessToken] = useState(null);
 
-  const loginRequest = useCallback(async (clean) => {
+  const getAccessToken = useCallback(async () => accessToken, [accessToken]);
+
+  useEffect(() => {
+    setApiAuth({
+      username: isSupabaseAuth ? null : username || null,
+      getAccessToken: isSupabaseAuth ? getAccessToken : null,
+    });
+  }, [username, accessToken, getAccessToken]);
+
+  const loginDev = useCallback(async (clean) => {
     const data = await api('/auth/dev-login', {
       method: 'POST',
       body: { username: clean },
@@ -19,9 +45,21 @@ export function AuthProvider({ children }) {
     return data.user;
   }, []);
 
+  const syncSupabaseSession = useCallback(async (session) => {
+    if (!session?.access_token) {
+      setAccessToken(null);
+      setUser(null);
+      return;
+    }
+    setAccessToken(session.access_token);
+    const data = await fetchMe({ token: session.access_token });
+    setUser(data.user);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
-    async function boot() {
+
+    async function bootDev() {
       if (!username) {
         setUser(null);
         setReady(true);
@@ -29,18 +67,16 @@ export function AuthProvider({ children }) {
       }
       setAuthError('');
       try {
-        const nextUser = await loginRequest(username);
+        const nextUser = await loginDev(username);
         if (!cancelled) setUser(nextUser);
       } catch (err) {
         if (!cancelled) {
-          // Keep username in the field; only clear session if API rejects the user.
           setUser(null);
           setAuthError(
             err?.message?.includes('fetch') || err?.name === 'TypeError'
               ? 'Cannot reach API at localhost:8787. Run npm run dev:api (or npm run dev).'
               : err.message || 'Login failed'
           );
-          // Network / server down — keep localStorage so retry works after API starts.
           if (err?.status && err.status >= 400 && err.status < 500) {
             localStorage.removeItem(STORAGE_KEY);
             setUsername('');
@@ -50,26 +86,72 @@ export function AuthProvider({ children }) {
         if (!cancelled) setReady(true);
       }
     }
-    boot();
+
+    async function bootSupabase() {
+      const client = assertSupabaseClient();
+      setAuthError('');
+      try {
+        const { data } = await client.auth.getSession();
+        if (cancelled) return;
+        if (data.session) {
+          await syncSupabaseSession(data.session);
+        } else {
+          setUser(null);
+          setAccessToken(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setUser(null);
+          setAccessToken(null);
+          setAuthError(err.message || 'Could not restore session');
+        }
+      } finally {
+        if (!cancelled) setReady(true);
+      }
+
+      const { data: listener } = client.auth.onAuthStateChange(async (_event, session) => {
+        if (cancelled) return;
+        try {
+          await syncSupabaseSession(session);
+        } catch (err) {
+          setUser(null);
+          setAuthError(err.message || 'Session expired');
+        }
+      });
+
+      return () => listener.subscription.unsubscribe();
+    }
+
+    if (isSupabaseAuth) {
+      const cleanupPromise = bootSupabase();
+      return () => {
+        cancelled = true;
+        cleanupPromise.then((cleanup) => cleanup?.());
+      };
+    }
+
+    bootDev();
     return () => {
       cancelled = true;
     };
-  }, [username, loginRequest]);
+  }, [username, loginDev, syncSupabaseSession]);
 
   const value = useMemo(
     () => ({
       ready,
       user,
-      username,
+      username: user?.username || username,
+      authMode: isSupabaseAuth ? 'supabase' : 'dev',
       authError,
       clearAuthError: () => setAuthError(''),
       login: async (name) => {
+        if (isSupabaseAuth) return false;
         const clean = String(name || '')
           .trim()
           .toLowerCase();
         setAuthError('');
         try {
-          const nextUser = await loginRequest(clean);
+          const nextUser = await loginDev(clean);
           localStorage.setItem(STORAGE_KEY, clean);
           setUsername(clean);
           setUser(nextUser);
@@ -84,14 +166,54 @@ export function AuthProvider({ children }) {
           return false;
         }
       },
-      logout: () => {
-        localStorage.removeItem(STORAGE_KEY);
-        setUsername('');
+      loginWithEmail: async (email, password) => {
+        const client = assertSupabaseClient();
+        setAuthError('');
+        const { data, error } = await client.auth.signInWithPassword({
+          email: String(email || '').trim(),
+          password: String(password || ''),
+        });
+        if (error) {
+          setAuthError(error.message);
+          return false;
+        }
+        await syncSupabaseSession(data.session);
+        setReady(true);
+        return true;
+      },
+      signUpWithEmail: async (email, password) => {
+        const client = assertSupabaseClient();
+        setAuthError('');
+        const { data, error } = await client.auth.signUp({
+          email: String(email || '').trim(),
+          password: String(password || ''),
+        });
+        if (error) {
+          setAuthError(error.message);
+          return false;
+        }
+        if (!data.session) {
+          setAuthError('Check your email to confirm your account, then sign in.');
+          return false;
+        }
+        await syncSupabaseSession(data.session);
+        setReady(true);
+        return true;
+      },
+      logout: async () => {
+        if (isSupabaseAuth) {
+          const client = assertSupabaseClient();
+          await client.auth.signOut();
+        } else {
+          localStorage.removeItem(STORAGE_KEY);
+          setUsername('');
+        }
         setUser(null);
+        setAccessToken(null);
         setAuthError('');
       },
     }),
-    [ready, user, username, authError, loginRequest]
+    [ready, user, username, authError, loginDev, syncSupabaseSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

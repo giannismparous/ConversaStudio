@@ -11,6 +11,7 @@
     "dev:api": "npm run dev -w @dialogos-forge/api",
     "dev:web": "npm run dev -w @dialogos-forge/web",
     "db:migrate": "npm run db:migrate -w @dialogos-forge/api",
+    "check:online": "node scripts/check-online-env.mjs",
     "build": "npm run build -w @dialogos-forge/core && npm run build -w @dialogos-forge/chat-widget && npm run build -w @dialogos-forge/api && npm run build -w @dialogos-forge/web"
   },
   "devDependencies": {

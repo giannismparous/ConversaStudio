@@ -1,12 +1,20 @@
+import { getApiAuth } from './apiAuth.js';
+
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8787').replace(/\/$/, '');
 
 export function getApiUrl() {
   return API_URL;
 }
 
-export async function api(path, { method = 'GET', body, username, formData, signal } = {}) {
+export async function api(path, { method = 'GET', body, username, token, formData, signal } = {}) {
   const headers = {};
-  if (username) headers['X-Dev-User'] = username;
+  const auth = getApiAuth();
+  const resolvedUsername = username ?? auth.username;
+  const resolvedToken = token ?? (await auth.getAccessToken?.());
+
+  if (resolvedToken) headers.Authorization = `Bearer ${resolvedToken}`;
+  if (resolvedUsername) headers['X-Dev-User'] = resolvedUsername;
+
   let payload = body;
   if (formData) {
     payload = formData;

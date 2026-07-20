@@ -20,10 +20,10 @@ function AppRoot() {
 }
 
 function RequireUser() {
-  const { ready, username, user, authError } = useAuth();
+  const { ready, user, authError } = useAuth();
   const { t } = useI18n();
   if (!ready) return <div className="app-shell muted">{t('common.loading')}</div>;
-  if (!username || !user) {
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
   if (authError && !user) {

@@ -10,7 +10,7 @@ import {
 } from '@dialogos-forge/core';
 import { pool, objectStore, env, vectorStore, getEmbedder } from '../config.js';
 import {
-  resolveDevUser,
+  resolveUser,
   requireBotOwner,
   mapBot,
   mapSource,
@@ -167,7 +167,7 @@ async function uniqueSlug(ownerId, baseName) {
 }
 
 export default async function botRoutes(fastify) {
-  fastify.addHook('preHandler', resolveDevUser);
+  fastify.addHook('preHandler', resolveUser);
 
   fastify.get('/bots', async (request) => {
     const { rows } = await pool.query(

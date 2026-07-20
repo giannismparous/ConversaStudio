@@ -15,22 +15,37 @@ const app = Fastify({
 
 await initDb();
 
-await app.register(cors, {
-  origin: true,
-  allowedHeaders: ['Content-Type', 'X-Dev-User'],
-});
+const corsOptions =
+  env.authMode === 'dev'
+    ? {
+        origin: true,
+        allowedHeaders: ['Content-Type', 'X-Dev-User', 'Authorization'],
+      }
+    : {
+        origin: env.corsOrigin,
+        credentials: true,
+        allowedHeaders: ['Content-Type', 'Authorization'],
+      };
+
+await app.register(cors, corsOptions);
 
 await app.register(multipart, {
   limits: { fileSize: 25 * 1024 * 1024 },
 });
 
-await app.register(fastifyStatic, {
-  root: env.uploadDir,
-  prefix: '/files/',
-  decorateReply: false,
-});
+if (env.storageMode === 'local') {
+  await app.register(fastifyStatic, {
+    root: env.uploadDir,
+    prefix: '/files/',
+    decorateReply: false,
+  });
+}
 
-app.get('/health', async () => ({ ok: true }));
+app.get('/health', async () => ({
+  ok: true,
+  authMode: env.authMode,
+  storageMode: env.storageMode,
+}));
 
 await app.register(authRoutes);
 await app.register(botRoutes);
@@ -45,7 +60,7 @@ try {
 }
 
 await app.listen({ port: env.apiPort, host: env.apiHost });
-console.log(`ConversaStudio API on http://localhost:${env.apiPort}`);
+console.log(`ConversaStudio API on http://localhost:${env.apiPort} (${env.authMode})`);
 
 async function shutdown() {
   await closeBrowser().catch(() => {});
