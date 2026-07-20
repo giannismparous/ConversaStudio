@@ -1,0 +1,60 @@
+import React from 'react';
+import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
+import { useAuth } from './lib/auth.jsx';
+import { useI18n } from './lib/i18n.jsx';
+import LoginPage from './pages/LoginPage.jsx';
+import BotsPage from './pages/BotsPage.jsx';
+import BotEditorPage from './pages/BotEditorPage.jsx';
+import BotTestPage from './pages/BotTestPage.jsx';
+import EmbedDemoPage from './pages/EmbedDemoPage.jsx';
+import Shell from './components/Shell.jsx';
+import OverscrollFill from './components/OverscrollFill.jsx';
+
+function AppRoot() {
+  return (
+    <>
+      <OverscrollFill />
+      <Outlet />
+    </>
+  );
+}
+
+function RequireUser() {
+  const { ready, username, user, authError } = useAuth();
+  const { t } = useI18n();
+  if (!ready) return <div className="app-shell muted">{t('common.loading')}</div>;
+  if (!username || !user) {
+    return <Navigate to="/login" replace />;
+  }
+  if (authError && !user) {
+    return <Navigate to="/login" replace />;
+  }
+  return <Outlet />;
+}
+
+export const router = createBrowserRouter([
+  {
+    element: <AppRoot />,
+    children: [
+      { path: '/login', element: <LoginPage /> },
+      {
+        path: '/',
+        element: <RequireUser />,
+        children: [
+          {
+            element: <Shell />,
+            children: [
+              { index: true, element: <Navigate to="/bots" replace /> },
+              { path: 'bots', element: <BotsPage /> },
+              { path: 'bots/new', element: <BotEditorPage /> },
+              { path: 'bots/:id', element: <BotEditorPage /> },
+              { path: 'bots/:id/test', element: <BotTestPage /> },
+            ],
+          },
+        ],
+      },
+      { path: '/embed-demo/:id', element: <EmbedDemoPage /> },
+      { path: '*', element: <Navigate to="/" replace /> },
+    ],
+  },
+]);

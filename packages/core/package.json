@@ -1,0 +1,15 @@
+{
+  "name": "@dialogos-forge/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "cheerio": "^1.0.0",
+    "playwright": "^1.51.1"
+  }
+}

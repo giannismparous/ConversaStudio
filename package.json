@@ -1,0 +1,22 @@
+{
+  "name": "dialogos-forge",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @dialogos-forge/api\" \"npm run dev -w @dialogos-forge/web\"",
+    "dev:api": "npm run dev -w @dialogos-forge/api",
+    "dev:web": "npm run dev -w @dialogos-forge/web",
+    "db:migrate": "npm run db:migrate -w @dialogos-forge/api",
+    "build": "npm run build -w @dialogos-forge/core && npm run build -w @dialogos-forge/chat-widget && npm run build -w @dialogos-forge/api && npm run build -w @dialogos-forge/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true
+  }
+}
