@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+ENV CHROMIUM_PATH=/usr/bin/chromium
 
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/

@@ -13,10 +13,37 @@ async function loadPlaywright() {
   }
 }
 
+function launchOptions() {
+  const executablePath =
+    process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ||
+    process.env.CHROMIUM_PATH ||
+    '';
+  const opts = {
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-zygote',
+      '--single-process',
+    ],
+  };
+  if (executablePath) opts.executablePath = executablePath;
+  return opts;
+}
+
 export async function getBrowser() {
   if (browserInstance) return browserInstance;
   const { chromium } = await loadPlaywright();
-  browserInstance = await chromium.launch({ headless: true });
+  try {
+    browserInstance = await chromium.launch(launchOptions());
+  } catch (err) {
+    const hint = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+      ? ''
+      : ' If deploying on Render/Docker, set PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium.';
+    throw new Error(`Could not start Chromium for site scraping: ${err.message}.${hint}`);
+  }
   return browserInstance;
 }
 
@@ -36,14 +63,16 @@ export class BrowserRenderSession {
     if (!this.#context) {
       const browser = await getBrowser();
       this.#context = await browser.newContext({
-        userAgent: 'ConversaStudioBot/0.1 (+local-dev)',
-        locale: 'en-US',
+        userAgent: 'ConversaStudioBot/0.1 (+https://conversastudio.netlify.app)',
+        locale: 'el-GR',
       });
     }
 
     const page = await this.#context.newPage();
     try {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 }).catch(async () => {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      });
       await page
         .waitForFunction(
           () => {
@@ -55,9 +84,11 @@ export class BrowserRenderSession {
               )
             );
           },
-          { timeout: 20000 }
+          { timeout: 25000 }
         )
         .catch(() => {});
+      // Give client routers a moment to hydrate text
+      await new Promise((r) => setTimeout(r, 800));
       return { html: await page.content(), finalUrl: page.url() };
     } finally {
       await page.close();

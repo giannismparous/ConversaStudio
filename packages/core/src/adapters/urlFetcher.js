@@ -214,6 +214,7 @@ export class SimpleUrlFetcher {
     const seen = new Set();
     const pages = [];
     let useBrowser = false;
+    let lastError = '';
     const browserSession = new BrowserRenderSession();
 
     try {
@@ -252,8 +253,26 @@ export class SimpleUrlFetcher {
           for (const link of this.extractLinks(pageUrl, fetched.html)) {
             if (!seen.has(link) && !queue.includes(link)) queue.push(link);
           }
-        } catch {
+        } catch (err) {
+          lastError = err?.message || String(err);
           // skip failed pages; continue crawl
+        }
+      }
+
+      // SPA with no crawlable HTML: at least index meta description so the source isn't empty
+      if (!pages.length) {
+        try {
+          const staticSeed = await this.fetchTextStatic(seed);
+          const meta = staticSeed.metaText || staticSeed.text || '';
+          if (meta && meta.length >= 40) {
+            pages.push({
+              url: seed,
+              title: staticSeed.title || seed,
+              text: meta,
+            });
+          }
+        } catch (err) {
+          lastError = lastError || err?.message || String(err);
         }
       }
     } finally {
@@ -261,7 +280,11 @@ export class SimpleUrlFetcher {
     }
 
     if (!pages.length) {
-      throw new Error('Site scrape found no usable pages');
+      throw new Error(
+        lastError
+          ? `Site scrape found no usable pages (${lastError})`
+          : 'Site scrape found no usable pages'
+      );
     }
     return pages;
   }
