@@ -312,6 +312,7 @@ export default function BotEditorPage() {
   const [preview, setPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadingIcon, setUploadingIcon] = useState(false);
+  const [iconPreview, setIconPreview] = useState(null);
   const [addingUrl, setAddingUrl] = useState(false);
   const [addingPaste, setAddingPaste] = useState(false);
   const [chunksOpen, setChunksOpen] = useState(false);
@@ -1060,6 +1061,7 @@ export default function BotEditorPage() {
   const removeIcon = async () => {
     if (!bot?.id) return;
     setError('');
+    setIconPreview(null);
     setUploadingIcon(true);
     try {
       const data = await api(`/bots/${bot.id}/icon`, {
@@ -1261,7 +1263,7 @@ export default function BotEditorPage() {
             <ThemePreview
               theme={theme}
               botName={name}
-              iconUrl={bot?.iconUrl}
+              iconUrl={iconPreview || bot?.iconUrl}
               welcomeMessage={welcomeMessage}
             />
           </div>
@@ -1271,6 +1273,7 @@ export default function BotEditorPage() {
             uploading={uploadingIcon}
             onUpload={uploadIcon}
             onRemove={removeIcon}
+            onPreviewChange={setIconPreview}
           />
         </div>
       </div>

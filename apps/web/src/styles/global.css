@@ -1480,6 +1480,7 @@ a.btn.btn-outline:hover {
 }
 
 .bot-icon-preview {
+  position: relative;
   width: 72px;
   height: 72px;
   border-radius: 18px;
@@ -1496,6 +1497,46 @@ a.btn.btn-outline:hover {
   height: 100%;
   display: block;
   object-fit: cover;
+}
+
+.bot-icon-img {
+  opacity: 0;
+  transform: scale(1.04);
+  transition:
+    opacity 0.35s ease,
+    transform 0.4s ease;
+}
+
+.bot-icon-img.is-ready {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.bot-icon-preview.is-uploading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, #fff 45%, transparent);
+  pointer-events: none;
+}
+
+.bot-icon-spinner {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(26, 24, 20, 0.15);
+  border-top-color: var(--accent, #c45f2f);
+  animation: bot-icon-spin 0.7s linear infinite;
+  z-index: 1;
+}
+
+@keyframes bot-icon-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .bot-icon-meta {
@@ -2432,6 +2473,7 @@ a.btn.btn-outline:hover {
   height: 22px;
   object-fit: cover;
   border-radius: 6px;
+  transition: opacity 0.3s ease;
 }
 
 .theme-preview-name {
@@ -2557,6 +2599,7 @@ a.btn.btn-outline:hover {
   height: 18px;
   object-fit: cover;
   border-radius: 5px;
+  transition: opacity 0.3s ease;
 }
 
 .theme-preview-launcher-text {

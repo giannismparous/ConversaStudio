@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { DefaultAvatar } from '@dialogos-forge/chat-widget';
 import { useI18n } from '../lib/i18n.jsx';
 import IconCropModal from './IconCropModal.jsx';
@@ -9,13 +9,60 @@ export default function BotIconField({
   uploading = false,
   onUpload,
   onRemove,
+  onPreviewChange,
 }) {
   const { t } = useI18n();
   const inputRef = useRef(null);
+  const localUrlRef = useRef(null);
   const [cropFile, setCropFile] = useState(null);
+  const [displayUrl, setDisplayUrl] = useState(iconUrl || '');
+  const [visible, setVisible] = useState(Boolean(iconUrl));
 
-  const hasCustom = Boolean(iconUrl);
+  const clearLocalPreview = () => {
+    if (localUrlRef.current) {
+      URL.revokeObjectURL(localUrlRef.current);
+      localUrlRef.current = null;
+    }
+  };
 
+  useEffect(() => {
+    if (!iconUrl) {
+      if (!localUrlRef.current) {
+        setDisplayUrl('');
+        setVisible(false);
+      }
+      return undefined;
+    }
+
+    let cancelled = false;
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => {
+      if (cancelled) return;
+      setDisplayUrl(iconUrl);
+      setVisible(true);
+      clearLocalPreview();
+      onPreviewChange?.(null);
+    };
+    img.onerror = () => {
+      if (cancelled) return;
+      // Keep local preview if remote fails to load.
+      if (!localUrlRef.current) setVisible(false);
+    };
+    img.src = iconUrl;
+    return () => {
+      cancelled = true;
+    };
+  }, [iconUrl, onPreviewChange]);
+
+  useEffect(
+    () => () => {
+      clearLocalPreview();
+    },
+    []
+  );
+
+  const hasCustom = Boolean(displayUrl);
   const pickFile = () => {
     if (uploading) return;
     inputRef.current?.click();
@@ -30,20 +77,46 @@ export default function BotIconField({
 
   const onCropped = async (blob) => {
     setCropFile(null);
+    clearLocalPreview();
+    const preview = URL.createObjectURL(blob);
+    localUrlRef.current = preview;
+    setDisplayUrl(preview);
+    setVisible(true);
+    onPreviewChange?.(preview);
+
     const file = new File([blob], 'icon.png', { type: 'image/png' });
     await onUpload(file);
+  };
+
+  const handleRemove = async () => {
+    clearLocalPreview();
+    setDisplayUrl('');
+    setVisible(false);
+    onPreviewChange?.(null);
+    await onRemove();
   };
 
   return (
     <div className="bot-icon-field">
       <label>{t('icon.label')}</label>
       <div className="bot-icon-row">
-        <div className="bot-icon-preview" aria-hidden="true">
+        <div
+          className={`bot-icon-preview${uploading ? ' is-uploading' : ''}${
+            visible && hasCustom ? ' has-image' : ''
+          }`}
+          aria-hidden="true"
+        >
           {hasCustom ? (
-            <img src={iconUrl} alt="" />
+            <img
+              src={displayUrl}
+              alt=""
+              className={`bot-icon-img${visible ? ' is-ready' : ''}`}
+              decoding="async"
+            />
           ) : (
             <DefaultAvatar size={72} accent={accent} />
           )}
+          {uploading && <span className="bot-icon-spinner" />}
         </div>
         <div className="bot-icon-meta">
           <div className="bot-icon-status">
@@ -70,7 +143,7 @@ export default function BotIconField({
                 type="button"
                 className="btn btn-ghost"
                 disabled={uploading}
-                onClick={onRemove}
+                onClick={handleRemove}
               >
                 {t('icon.remove')}
               </button>
