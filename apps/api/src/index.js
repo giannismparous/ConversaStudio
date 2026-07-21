@@ -47,6 +47,12 @@ app.get('/health', async () => ({
   storageMode: env.storageMode,
 }));
 
+app.get('/', async () => ({
+  ok: true,
+  service: 'conversastudio-api',
+  health: '/health',
+}));
+
 await app.register(authRoutes);
 await app.register(botRoutes);
 await app.register(publicRoutes);

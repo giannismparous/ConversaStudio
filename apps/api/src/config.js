@@ -31,7 +31,7 @@ export const env = {
   geminiChatModel: process.env.GEMINI_CHAT_MODEL || 'gemini-flash-lite-latest',
   geminiEmbedDims: Number(process.env.GEMINI_EMBED_DIMS || 768),
   databaseUrl: process.env.DATABASE_URL || 'pglite:./data/pglite',
-  apiPort: Number(process.env.API_PORT || 8787),
+  apiPort: Number(process.env.PORT || process.env.API_PORT || 8787),
   apiHost: process.env.API_HOST || '0.0.0.0',
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   uploadDir: path.resolve(rootDir, process.env.UPLOAD_DIR || 'data/uploads'),
