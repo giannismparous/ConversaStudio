@@ -5,6 +5,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { useI18n } from '../lib/i18n.jsx';
 import { useConfirm } from '../lib/useConfirm.jsx';
+import AppLoading from '../components/AppLoading.jsx';
 
 function StatusBadge({ status }) {
   const { t } = useI18n();
@@ -108,8 +109,9 @@ export default function BotsPage() {
       )}
 
       {loading && (
-        <div className="bots-empty">
-          <p className="muted">{t('common.loading')}</p>
+        <div className="bots-loading">
+          <span className="app-loading-spinner" aria-hidden="true" />
+          <span className="muted">{t('common.loading')}</span>
         </div>
       )}
 

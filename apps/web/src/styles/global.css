@@ -72,6 +72,66 @@ select {
   min-height: 100vh;
 }
 
+.app-loading {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  animation: app-loading-in 0.35s ease;
+}
+
+.app-loading-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.15rem;
+  text-align: center;
+}
+
+.app-loading-brand {
+  font-family: var(--display);
+  font-size: 1.65rem;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.app-loading-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.app-loading-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(26, 24, 20, 0.12);
+  border-top-color: var(--accent, #c45f2f);
+  animation: bot-icon-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.app-loading-label {
+  letter-spacing: -0.01em;
+}
+
+@keyframes app-loading-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .shell-bar {
   display: flex;
   align-items: center;

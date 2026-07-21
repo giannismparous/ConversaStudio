@@ -1,7 +1,6 @@
 import React from 'react';
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from './lib/auth.jsx';
-import { useI18n } from './lib/i18n.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import BotsPage from './pages/BotsPage.jsx';
 import BotEditorPage from './pages/BotEditorPage.jsx';
@@ -9,6 +8,7 @@ import BotTestPage from './pages/BotTestPage.jsx';
 import EmbedDemoPage from './pages/EmbedDemoPage.jsx';
 import Shell from './components/Shell.jsx';
 import OverscrollFill from './components/OverscrollFill.jsx';
+import AppLoading from './components/AppLoading.jsx';
 
 function AppRoot() {
   return (
@@ -21,8 +21,7 @@ function AppRoot() {
 
 function RequireUser() {
   const { ready, user, authError } = useAuth();
-  const { t } = useI18n();
-  if (!ready) return <div className="app-shell muted">{t('common.loading')}</div>;
+  if (!ready) return <AppLoading />;
   if (!user) {
     return <Navigate to="/login" replace />;
   }

@@ -5,9 +5,11 @@ import { useI18n } from '../lib/i18n.jsx';
 import { isSupabaseAuth } from '../lib/authMode.js';
 import LanguageSwitcherIcon from '../components/LanguageSwitcherIcon.jsx';
 import AppBrand from '../components/AppBrand.jsx';
+import AppLoading from '../components/AppLoading.jsx';
 
 export default function LoginPage() {
   const {
+    ready,
     username,
     user,
     login,
@@ -26,6 +28,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  if (!ready) return <AppLoading />;
   if (user) return <Navigate to="/bots" replace />;
 
   const submitDev = async (e) => {
