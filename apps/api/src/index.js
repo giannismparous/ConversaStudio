@@ -22,7 +22,17 @@ const corsOptions =
         allowedHeaders: ['Content-Type', 'X-Dev-User', 'Authorization'],
       }
     : {
-        origin: env.corsOrigin,
+        origin: (origin, cb) => {
+          const allowed = String(env.corsOrigin || '')
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
+          if (!origin || allowed.includes(origin)) {
+            cb(null, true);
+            return;
+          }
+          cb(null, false);
+        },
         credentials: true,
         allowedHeaders: ['Content-Type', 'Authorization'],
       };

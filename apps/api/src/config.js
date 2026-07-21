@@ -41,6 +41,7 @@ export const env = {
   ),
   supabaseUrl: (process.env.SUPABASE_URL || '').replace(/\/$/, ''),
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+  supabaseAnonKey: process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '',
   supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET || 'conversastudio',
 };
 

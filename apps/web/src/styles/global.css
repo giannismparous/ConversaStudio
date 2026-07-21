@@ -858,6 +858,25 @@ a.btn.btn-outline:hover {
   font-size: 0.9rem;
 }
 
+.login-error {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--err) 35%, transparent);
+  background: color-mix(in srgb, var(--err) 12%, var(--panel, #faf9f5));
+  color: var(--err);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.bots-page > .error-text,
+.bots-page > .login-error {
+  margin: 0 0 1rem;
+}
+
 .login-page {
   position: relative;
   z-index: 1;

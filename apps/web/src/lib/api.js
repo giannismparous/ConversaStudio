@@ -1,4 +1,5 @@
 import { getApiAuth } from './apiAuth.js';
+import { isSupabaseAuth } from './authMode.js';
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8787').replace(/\/$/, '');
 
@@ -6,14 +7,35 @@ export function getApiUrl() {
   return API_URL;
 }
 
+function friendlyNetworkError(err) {
+  const msg = String(err?.message || '');
+  if (
+    err?.name === 'TypeError' ||
+    /failed to fetch|load failed|networkerror|network request failed/i.test(msg)
+  ) {
+    return isSupabaseAuth
+      ? 'Cannot reach the API. The server may be waking up — wait a few seconds and refresh.'
+      : 'Cannot reach API at localhost:8787. Run npm run dev:api (or npm run dev).';
+  }
+  return msg || 'Request failed';
+}
+
 export async function api(path, { method = 'GET', body, username, token, formData, signal } = {}) {
   const headers = {};
   const auth = getApiAuth();
-  const resolvedUsername = username ?? auth.username;
   const resolvedToken = token ?? (await auth.getAccessToken?.());
+  const resolvedUsername = isSupabaseAuth
+    ? null
+    : (username ?? auth.username);
 
   if (resolvedToken) headers.Authorization = `Bearer ${resolvedToken}`;
   if (resolvedUsername) headers['X-Dev-User'] = resolvedUsername;
+
+  if (isSupabaseAuth && !resolvedToken && !path.startsWith('/auth/config') && !path.startsWith('/public')) {
+    const err = new Error('Not signed in');
+    err.status = 401;
+    throw err;
+  }
 
   let payload = body;
   if (formData) {
@@ -23,12 +45,19 @@ export async function api(path, { method = 'GET', body, username, token, formDat
     payload = JSON.stringify(body);
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
-    method,
-    headers,
-    body: payload,
-    signal,
-  });
+  let res;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method,
+      headers,
+      body: payload,
+      signal,
+    });
+  } catch (err) {
+    const networkErr = new Error(friendlyNetworkError(err));
+    networkErr.cause = err;
+    throw networkErr;
+  }
 
   const text = await res.text();
   let data = null;

@@ -35,7 +35,7 @@ function Stat({ label, value }) {
 }
 
 export default function BotsPage() {
-  const { username } = useAuth();
+  const { username, ready, user } = useAuth();
   const { t, dateLocale } = useI18n();
   const navigate = useNavigate();
   const { confirm, dialog } = useConfirm();
@@ -57,8 +57,9 @@ export default function BotsPage() {
   };
 
   useEffect(() => {
+    if (!ready || !user) return;
     load();
-  }, [username]);
+  }, [ready, user?.id, username]);
 
   const duplicate = async (id) => {
     try {
@@ -100,7 +101,11 @@ export default function BotsPage() {
         </Link>
       </div>
 
-      {error && <p className="error-text">{error}</p>}
+      {error && (
+        <div className="login-error" role="alert">
+          {error}
+        </div>
+      )}
 
       {loading && (
         <div className="bots-empty">

@@ -59,18 +59,40 @@ async function upsertSupabaseUser({ sub, email }) {
   return rows[0];
 }
 
+async function verifyViaAuthApi(token) {
+  const apikey = env.supabaseServiceRoleKey || env.supabaseAnonKey;
+  if (!apikey) throw new Error('missing_supabase_key');
+
+  const res = await fetch(`${env.supabaseUrl}/auth/v1/user`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey,
+    },
+  });
+  if (!res.ok) throw new Error(`auth_api_${res.status}`);
+  const user = await res.json();
+  const sub = String(user?.id || '');
+  const email = typeof user?.email === 'string' ? user.email : '';
+  if (!sub) throw new Error('invalid_token');
+  return { sub, email };
+}
+
 export async function verifySupabaseAccessToken(token) {
   if (!env.supabaseUrl) {
     throw new Error('SUPABASE_URL is not configured');
   }
-  const { payload } = await jwtVerify(token, getJwks(), {
-    issuer: `${env.supabaseUrl}/auth/v1`,
-    audience: 'authenticated',
-  });
-  const sub = String(payload.sub || '');
-  const email = typeof payload.email === 'string' ? payload.email : '';
-  if (!sub) throw new Error('invalid_token');
-  return { sub, email };
+
+  try {
+    const { payload } = await jwtVerify(token, getJwks(), {
+      issuer: `${env.supabaseUrl}/auth/v1`,
+    });
+    const sub = String(payload.sub || '');
+    const email = typeof payload.email === 'string' ? payload.email : '';
+    if (!sub) throw new Error('invalid_token');
+    return { sub, email };
+  } catch {
+    return verifyViaAuthApi(token);
+  }
 }
 
 export async function resolveDevUser(request, reply) {

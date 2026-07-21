@@ -27,7 +27,17 @@ export function AuthProvider({ children }) {
   const [authError, setAuthError] = useState('');
   const [accessToken, setAccessToken] = useState(null);
 
-  const getAccessToken = useCallback(async () => accessToken, [accessToken]);
+  const getAccessToken = useCallback(async () => {
+    if (!isSupabaseAuth) return null;
+    if (accessToken) return accessToken;
+    try {
+      const client = assertSupabaseClient();
+      const { data } = await client.auth.getSession();
+      return data.session?.access_token || null;
+    } catch {
+      return null;
+    }
+  }, [accessToken]);
 
   useEffect(() => {
     setApiAuth({

@@ -75,6 +75,12 @@ export default function LoginPage() {
         </div>
         <p>{isSupabaseAuth ? t('login.taglineOnline') : t('login.tagline')}</p>
 
+        {shownError && (
+          <div className="login-error" role="alert">
+            {shownError}
+          </div>
+        )}
+
         {isSupabaseAuth ? (
           <>
             <div className="field">
@@ -160,8 +166,6 @@ export default function LoginPage() {
             </button>
           </>
         )}
-
-        {shownError && <p className="error-text">{shownError}</p>}
       </form>
     </div>
   );
