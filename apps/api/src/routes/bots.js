@@ -607,7 +607,7 @@ export default async function botRoutes(fastify) {
     const buf = await file.toBuffer();
     const key = `${bot.id}/icon.png`;
     await objectStore.put(key, buf, 'image/png');
-    const iconUrl = `${env.publicApiUrl}/files/${key}?v=${Date.now()}`;
+    const iconUrl = `${objectStore.publicUrl(key)}?v=${Date.now()}`;
     const { rows } = await pool.query(
       `UPDATE bots SET icon_url = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
       [bot.id, iconUrl]
