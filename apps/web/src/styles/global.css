@@ -373,6 +373,15 @@ select {
   opacity: 0.55;
 }
 
+.bots-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  min-height: calc(100vh - 220px);
+  animation: app-loading-in 0.35s ease;
+}
+
 .section-title {
   font-family: var(--display);
   font-size: 1.65rem;
