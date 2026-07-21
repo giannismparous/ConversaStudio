@@ -1114,39 +1114,41 @@ export default function BotEditorPage() {
               </span>
             )}
           </span>
-          {!isNew && bot?.id && hasPriorBuild && (
-            <Link className="btn btn-secondary" to={`/bots/${bot.id}/test`}>
-              {t('editor.testPlatform')}
-            </Link>
-          )}
-          <div className="editor-save-group">
-            <span
-              className={[
-                'editor-save-feedback',
-                saveFeedback === 'saving' && 'is-saving',
-                saveFeedback === 'saved' && 'is-saved',
-                saveFeedback === 'saved-fade' && 'is-saved is-fade-out',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              aria-live="polite"
-            >
-              {saveFeedback === 'saving' && t('common.saving')}
-              {(saveFeedback === 'saved' || saveFeedback === 'saved-fade') && (
-                <>
-                  <CheckIcon />
-                  {t('common.saved')}
-                </>
-              )}
-            </span>
-            <button
-              className="btn btn-accent"
-              type="button"
-              onClick={saveBot}
-              disabled={saveFeedback === 'saving' || !name.trim()}
-            >
-              {t('common.save')}
-            </button>
+          <div className="editor-primary-actions">
+            {!isNew && bot?.id && hasPriorBuild && (
+              <Link className="btn btn-secondary" to={`/bots/${bot.id}/test`}>
+                {t('editor.testPlatform')}
+              </Link>
+            )}
+            <div className="editor-save-group">
+              <span
+                className={[
+                  'editor-save-feedback',
+                  saveFeedback === 'saving' && 'is-saving',
+                  saveFeedback === 'saved' && 'is-saved',
+                  saveFeedback === 'saved-fade' && 'is-saved is-fade-out',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                aria-live="polite"
+              >
+                {saveFeedback === 'saving' && t('common.saving')}
+                {(saveFeedback === 'saved' || saveFeedback === 'saved-fade') && (
+                  <>
+                    <CheckIcon />
+                    {t('common.saved')}
+                  </>
+                )}
+              </span>
+              <button
+                className="btn btn-accent"
+                type="button"
+                onClick={saveBot}
+                disabled={saveFeedback === 'saving' || !name.trim()}
+              >
+                {t('common.save')}
+              </button>
+            </div>
           </div>
         </div>
       </div>
