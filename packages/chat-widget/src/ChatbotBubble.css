@@ -122,7 +122,7 @@
 
 /* Shared typewriter */
 .typewriter-placeholder {
-  color: rgba(20, 20, 19, 0.42);
+  color: color-mix(in srgb, var(--df-text, #141413) 55%, transparent);
   font-family: var(--font-sans);
   font-size: 0.86rem;
   font-weight: 450;
@@ -139,7 +139,7 @@
   height: 0.95em;
   margin-left: 1px;
   vertical-align: text-bottom;
-  background: rgba(20, 20, 19, 0.35);
+  background: color-mix(in srgb, var(--df-text, #141413) 45%, transparent);
   animation: cursorBlink 1s step-end infinite;
 }
 

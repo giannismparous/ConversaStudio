@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 export default function ConfirmDialog({
   title,
@@ -14,19 +15,28 @@ export default function ConfirmDialog({
     const onKey = (e) => {
       if (e.key === 'Escape' && !busy) onCancel();
     };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
   }, [onCancel, busy]);
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div
       className="confirm-backdrop"
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"
-      onClick={busy ? undefined : onCancel}
+      onMouseDown={(e) => {
+        if (!busy && e.target === e.currentTarget) onCancel();
+      }}
     >
-      <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+      <div className="confirm-dialog" onMouseDown={(e) => e.stopPropagation()}>
         <h3 id="confirm-dialog-title" className="confirm-dialog-title">
           {title}
         </h3>
@@ -45,6 +55,7 @@ export default function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

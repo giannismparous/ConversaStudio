@@ -16,6 +16,7 @@ export default async function publicRoutes(fastify) {
       iconUrl: bot.iconUrl,
       welcomeMessage: bot.welcomeMessage,
       suggestedQuestions: bot.suggestedQuestions,
+      sourceCitations: bot.sourceCitations,
       status: bot.status,
     };
   });
@@ -78,8 +79,25 @@ export default async function publicRoutes(fastify) {
       '.df-welcome-avatar{flex-shrink:0;line-height:0}',
       '.df-welcome-avatar img,.df-welcome-avatar svg{width:26px;height:26px;border-radius:8px;display:block}',
       '.df-bubble{max-width:85%;padding:10px 14px;border-radius:16px;white-space:pre-wrap;line-height:1.45;font-size:14px}',
-      '.df-bubble-user{align-self:flex-end;border-radius:16px 16px 4px 16px;background:var(--df-accent,#d97757);color:#fff}',
-      '.df-bubble-bot{align-self:flex-start;border-radius:16px 16px 16px 4px;background:#fff;color:var(--df-text,#141413);box-shadow:0 1px 4px rgba(20,20,19,.06)}',
+      '.df-bubble-user{align-self:flex-end;border-radius:16px 16px 4px 16px;background:var(--df-user-bubble,var(--df-text,#141413));color:var(--df-user-fg,#fff)}',
+      '.df-bubble-bot{align-self:flex-start;border-radius:16px 16px 16px 4px;background:#fff;color:var(--df-text,#141413);border:1px solid rgba(20,20,19,.1);box-shadow:0 1px 4px rgba(20,20,19,.05)}',
+      '.df-msg{display:flex;flex-direction:column;gap:6px;max-width:100%}',
+      '.df-msg-user{align-items:flex-end}',
+      '.df-msg-bot{align-items:flex-start}',
+      '.df-sources{align-self:stretch;padding:0 2px;font-size:12px;line-height:1.35;color:rgba(20,20,19,.55)}',
+      '.df-sources-label{margin:0 0 4px;font-weight:600;font-size:11px;letter-spacing:.02em;text-transform:uppercase;color:rgba(20,20,19,.45)}',
+      '.df-sources ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px}',
+      '.df-source-row{display:inline-flex;align-items:center;gap:6px;max-width:100%;min-width:0;color:var(--df-text,#141413);text-decoration:none;opacity:.78;border-radius:8px;padding:2px 4px 2px 2px}',
+      'a.df-source-row:hover{opacity:1;color:var(--df-accent,#d97757);background:rgba(20,20,19,.04)}',
+      '.df-source-row.is-static{opacity:.62;cursor:default}',
+      '.df-source-name{min-width:0;overflow-wrap:anywhere}',
+      '.df-source-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex-shrink:0;color:#6a6256}',
+      '.df-source-icon svg{width:16px;height:16px;display:block}',
+      '.df-source-icon--pdf{color:#b42318}',
+      '.df-source-icon--txt{color:#3b6ea5}',
+      '.df-source-icon--md{color:#2f6b4f}',
+      '.df-source-icon--doc{color:#6a6256}',
+      '.df-source-icon--link{color:#6a6256}',
       '.df-footer{padding:6px 16px 14px;flex-shrink:0}',
       '.df-input-bar{display:flex;align-items:center;gap:6px;min-height:44px;background:#fff;border:1px solid rgba(20,20,19,.1);border-radius:999px;padding:5px 6px 5px 15px;box-shadow:0 2px 14px rgba(20,20,19,.06)}',
       '.df-input{flex:1;min-width:0;border:0;background:transparent;font:inherit;font-size:14px;color:#141413;padding:4px 0;margin:0;line-height:1.4;outline:none}',
@@ -89,7 +107,7 @@ export default async function publicRoutes(fastify) {
       '.df-send-btn svg{display:block;width:16px;height:16px}',
       '.df-chips{display:flex;flex-direction:column;align-items:flex-start;gap:5px}',
       '.df-chips-below{padding-left:34px;animation:dfChipsIn .32s cubic-bezier(.16,1,.3,1) .12s both}',
-      '.df-chip{border:0;border-radius:999px;padding:6px 13px;background:#141413;color:#faf9f5;font:inherit;font-size:12px;font-weight:500;line-height:1.25;cursor:pointer;text-align:left;max-width:100%;animation:dfChipIn .3s cubic-bezier(.16,1,.3,1) both}',
+      '.df-chip{border:0;border-radius:999px;padding:6px 13px;background:var(--df-user-bubble,var(--df-text,#141413));color:var(--df-user-fg,#faf9f5);font:inherit;font-size:12px;font-weight:500;line-height:1.25;cursor:pointer;text-align:left;max-width:100%;animation:dfChipIn .3s cubic-bezier(.16,1,.3,1) both}',
       '@keyframes dfIdleIn{from{opacity:0}to{opacity:1}}',
       '@keyframes dfWelcomeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}',
       '@keyframes dfChipsIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}',
@@ -130,6 +148,21 @@ export default async function publicRoutes(fastify) {
     .then(function(cfg){
       var theme = cfg.theme || {};
       var accent = theme.accent || '#d97757';
+      var textColor = theme.textColor || '#141413';
+      var userFg = (function (hex) {
+        var raw = String(hex || '').replace('#', '');
+        if (!/^[0-9a-fA-F]{6}$/.test(raw)) return '#faf9f5';
+        function lin(c) {
+          var v = parseInt(c, 16) / 255;
+          return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        }
+        var L =
+          0.2126 * lin(raw.slice(0, 2)) +
+          0.7152 * lin(raw.slice(2, 4)) +
+          0.0722 * lin(raw.slice(4, 6));
+        return L > 0.55 ? '#141413' : '#faf9f5';
+      })(textColor);
+      var showSources = !(cfg.sourceCitations && cfg.sourceCitations.showSources === false);
       var open = false;
       var isClosing = false;
       var messages = [];
@@ -139,7 +172,9 @@ export default async function publicRoutes(fastify) {
       launcher.type = 'button';
       launcher.className = 'df-launcher';
       launcher.style.setProperty('--df-launcher-bg', theme.launcherBg || '#fff');
-      launcher.style.setProperty('--df-text', theme.textColor || '#141413');
+      launcher.style.setProperty('--df-text', textColor);
+      launcher.style.setProperty('--df-user-bubble', textColor);
+      launcher.style.setProperty('--df-user-fg', userFg);
       launcher.style.setProperty('--df-accent', accent);
 
       var launcherAvatar = document.createElement('span');
@@ -161,7 +196,9 @@ export default async function publicRoutes(fastify) {
       var panel = document.createElement('div');
       panel.className = 'df-panel';
       panel.style.setProperty('--df-panel-bg', theme.panelBg || '#faf9f5');
-      panel.style.setProperty('--df-text', theme.textColor || '#141413');
+      panel.style.setProperty('--df-text', textColor);
+      panel.style.setProperty('--df-user-bubble', textColor);
+      panel.style.setProperty('--df-user-fg', userFg);
       panel.style.setProperty('--df-accent', accent);
 
       var header = document.createElement('div');
@@ -204,8 +241,6 @@ export default async function publicRoutes(fastify) {
       var log = document.createElement('div');
       log.className = 'df-log';
 
-      var idle = document.createElement('div');
-      idle.className = 'df-idle';
       var welcomeText = String(cfg.welcomeMessage || '').trim();
       if (welcomeText) {
         var welcomeRow = document.createElement('div');
@@ -218,15 +253,15 @@ export default async function publicRoutes(fastify) {
         welcomeBubble.textContent = welcomeText;
         welcomeRow.appendChild(welcomeAvatar);
         welcomeRow.appendChild(welcomeBubble);
-        idle.appendChild(welcomeRow);
+        log.appendChild(welcomeRow);
       }
-      if (chips.childNodes.length) idle.appendChild(chips);
-      if (idle.childNodes.length) log.appendChild(idle);
+      if (chips.childNodes.length) log.appendChild(chips);
 
-      function setIdleVisible(show) {
-        idle.style.display = show && idle.childNodes.length ? 'flex' : 'none';
+      function setChipsVisible(show) {
+        if (!chips.childNodes.length) return;
+        chips.style.display = show ? 'flex' : 'none';
       }
-      setIdleVisible(false);
+      setChipsVisible(false);
 
       var footer = document.createElement('div');
       footer.className = 'df-footer';
@@ -263,7 +298,7 @@ export default async function publicRoutes(fastify) {
         setTimeout(function() {
           panel.classList.remove('df-panel-opening');
         }, 680);
-        setIdleVisible(!hasUserSent);
+        setChipsVisible(!hasUserSent);
       }
 
       function closePanel() {
@@ -283,16 +318,91 @@ export default async function publicRoutes(fastify) {
         }, 480);
       }
 
-      function addMsg(role, text) {
+      function sourceIconEl(source) {
+        var type = String((source && source.type) || '').toLowerCase();
+        var kind = String((source && source.kind) || (type === 'url' ? 'url' : 'file'));
+        var label = String((source && (source.label || source.title)) || '').toLowerCase();
+        var extMatch = label.match(/\.([a-z0-9]+)(?:\?|#|$)/i);
+        var ext = extMatch ? extMatch[1] : type === 'pdf' ? 'pdf' : type === 'txt' || type === 'text' ? 'txt' : '';
+        var tone = 'doc';
+        var mark = 'DOC';
+        if (kind === 'url') {
+          tone = 'link';
+        } else if (ext === 'pdf' || type === 'pdf') {
+          tone = 'pdf';
+          mark = 'PDF';
+        } else if (ext === 'txt' || ext === 'text' || type === 'txt' || type === 'text') {
+          tone = 'txt';
+          mark = 'TXT';
+        } else if (ext === 'md' || ext === 'markdown') {
+          tone = 'md';
+          mark = 'MD';
+        }
+        var wrap = document.createElement('span');
+        wrap.className = 'df-source-icon df-source-icon--' + tone;
+        wrap.setAttribute('aria-hidden', 'true');
+        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', kind === 'url' ? '0 0 24 24' : '0 0 32 32');
+        if (kind === 'url') {
+          svg.innerHTML =
+            '<path d="M10 13a5 5 0 0 0 7.07 0l1.41-1.41a5 5 0 0 0-7.07-7.07L10 5.93" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>' +
+            '<path d="M14 11a5 5 0 0 0-7.07 0L5.52 12.41a5 5 0 0 0 7.07 7.07L14 18.07" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>';
+        } else {
+          svg.innerHTML =
+            '<path fill="currentColor" opacity="0.92" d="M8 2h11l7 7v19a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>' +
+            '<path fill="rgba(255,255,255,0.92)" d="M19 2v6a1 1 0 0 0 1 1h6"/>' +
+            '<text x="16" y="23" text-anchor="middle" fill="rgba(255,255,255,0.96)" font-size="8" font-weight="700" font-family="ui-sans-serif, system-ui, sans-serif">' +
+            mark +
+            '</text>';
+        }
+        wrap.appendChild(svg);
+        return wrap;
+      }
+
+      function addMsg(role, text, sources) {
         messages.push({ role: role === 'user' ? 'user' : 'assistant', content: text });
+        var wrap = document.createElement('div');
+        wrap.className = 'df-msg ' + (role === 'user' ? 'df-msg-user' : 'df-msg-bot');
         var bubble = document.createElement('div');
         bubble.className = 'df-bubble ' + (role === 'user' ? 'df-bubble-user' : 'df-bubble-bot');
         bubble.textContent = text;
-        log.appendChild(bubble);
+        wrap.appendChild(bubble);
+        if (role !== 'user' && showSources && sources && sources.length) {
+          var srcBox = document.createElement('div');
+          srcBox.className = 'df-sources';
+          var srcLabel = document.createElement('p');
+          srcLabel.className = 'df-sources-label';
+          srcLabel.textContent = 'Sources';
+          srcBox.appendChild(srcLabel);
+          var list = document.createElement('ul');
+          sources.forEach(function(source) {
+            var title = String((source && source.title) || 'Source').trim() || 'Source';
+            var url = source && source.url ? String(source.url) : '';
+            var li = document.createElement('li');
+            var row = url ? document.createElement('a') : document.createElement('span');
+            row.className = 'df-source-row' + (url ? '' : ' is-static');
+            if (url) {
+              row.href = url;
+              row.target = '_blank';
+              row.rel = 'noopener noreferrer';
+            }
+            row.title = String((source && source.label) || title);
+            row.appendChild(sourceIconEl(source));
+            var name = document.createElement('span');
+            name.className = 'df-source-name';
+            name.textContent = title;
+            row.appendChild(name);
+            li.appendChild(row);
+            list.appendChild(li);
+          });
+          srcBox.appendChild(list);
+          wrap.appendChild(srcBox);
+        }
+        log.appendChild(wrap);
         log.scrollTop = log.scrollHeight;
         if (role === 'user') {
           hasUserSent = true;
-          setIdleVisible(false);
+          setChipsVisible(false);
         }
       }
 
@@ -308,7 +418,7 @@ export default async function publicRoutes(fastify) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: text, history: history })
         }).then(function(r){ return r.json(); }).then(function(data){
-          addMsg('bot', data.answer || data.message || 'No answer');
+          addMsg('bot', data.answer || data.message || 'No answer', data.sources || []);
         }).catch(function(){
           addMsg('bot', 'Something went wrong. Please try again.');
         });

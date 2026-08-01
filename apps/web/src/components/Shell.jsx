@@ -24,7 +24,11 @@ export default function Shell() {
           </button>
         </div>
       </header>
-      <Outlet />
+      <main className="shell-main">
+        <div className="shell-main-inner">
+          <Outlet />
+        </div>
+      </main>
     </div>
   );
 }

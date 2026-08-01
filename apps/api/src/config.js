@@ -29,6 +29,8 @@ export const env = {
   geminiApiKey: process.env.GEMINI_API_KEY || '',
   geminiEmbedModel: process.env.GEMINI_EMBED_MODEL || 'gemini-embedding-001',
   geminiChatModel: process.env.GEMINI_CHAT_MODEL || 'gemini-flash-lite-latest',
+  /** Working Flash-Lite alias — used only for one-word name→gender classification. */
+  geminiGenderModel: process.env.GEMINI_GENDER_MODEL || 'gemini-flash-lite-latest',
   geminiEmbedDims: Number(process.env.GEMINI_EMBED_DIMS || 768),
   databaseUrl: process.env.DATABASE_URL || 'pglite:./data/pglite',
   apiPort: Number(process.env.PORT || process.env.API_PORT || 8787),
@@ -109,5 +111,15 @@ export function getChatModel() {
   return new GeminiChatModel({
     apiKey: env.geminiApiKey,
     model: env.geminiChatModel,
+  });
+}
+
+/** Tiny classification calls only — cheap Flash-Lite, tiny output budget. */
+export function getGenderInferModel() {
+  return new GeminiChatModel({
+    apiKey: env.geminiApiKey,
+    model: env.geminiGenderModel,
+    maxOutputTokens: 32,
+    temperature: 0,
   });
 }

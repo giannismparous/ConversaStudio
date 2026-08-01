@@ -4,38 +4,54 @@ import { ChatbotBubble } from '@dialogos-forge/chat-widget';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { useI18n } from '../lib/i18n.jsx';
-import LanguageToggle from '../components/LanguageToggle.jsx';
-import { normalizeSuggestedQuestions, resolveTestUiCopy } from '../lib/testUiLocalize.js';
+import {
+  greekFallbackUiCopy,
+  normalizeSuggestedQuestions,
+  personalizeUiCopy,
+  resolveTestUiCopy,
+} from '../lib/testUiLocalize.js';
 
 const EMPTY_UI = { welcomeMessage: '', suggestedQuestions: [] };
 
+/** Instant copy only — returns null when Greek needs a translate API call. */
 function uiCopyForBot(bot, language, botName) {
+  const questions = normalizeSuggestedQuestions(bot.suggestedQuestions);
+  const gender = bot.personaGender || 'neutral';
   return resolveTestUiCopy({
     welcomeMessage: bot.welcomeMessage,
-    suggestedQuestions: normalizeSuggestedQuestions(bot.suggestedQuestions),
+    suggestedQuestions: questions,
     language,
     botName,
+    personaGender: gender,
   });
 }
 
 export default function BotTestPage() {
   const { id } = useParams();
   const { username } = useAuth();
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [bot, setBot] = useState(null);
   const [error, setError] = useState('');
-  const [testLanguage, setTestLanguage] = useState('en');
+  // Follow the app language toggle (Greek UI → Greek welcome/chips).
+  const [testLanguage, setTestLanguage] = useState(locale === 'el' ? 'el' : 'en');
   const [resetSignal, setResetSignal] = useState(0);
   const [uiCopy, setUiCopy] = useState(EMPTY_UI);
   const [uiLoading, setUiLoading] = useState(false);
   const [uiError, setUiError] = useState('');
 
   useEffect(() => {
+    const next = locale === 'el' ? 'el' : 'en';
+    setTestLanguage((prev) => {
+      if (prev === next) return prev;
+      setResetSignal((value) => value + 1);
+      return next;
+    });
+  }, [locale]);
+
+  useEffect(() => {
     api(`/bots/${id}`, { username })
       .then((data) => {
         setBot(data.bot);
-        const instant = uiCopyForBot(data.bot, 'en', data.bot.name);
-        if (instant) setUiCopy(instant);
       })
       .catch((err) => setError(err.message));
   }, [id, username]);
@@ -44,6 +60,7 @@ export default function BotTestPage() {
     if (!bot) return undefined;
 
     let cancelled = false;
+    const gender = bot.personaGender || 'neutral';
 
     const applyCopy = (copy) => {
       if (!cancelled) {
@@ -58,6 +75,7 @@ export default function BotTestPage() {
     if (instant) {
       applyCopy(instant);
       setUiLoading(false);
+      setUiError('');
       return undefined;
     }
 
@@ -67,21 +85,36 @@ export default function BotTestPage() {
         suggestedQuestions: normalizeSuggestedQuestions(bot.suggestedQuestions),
       });
       setUiLoading(false);
+      setUiError('');
       return undefined;
     }
 
+    // Greek + custom English UI copy → translate (never leave English on screen).
     setUiLoading(true);
     setUiError('');
+    applyCopy(greekFallbackUiCopy(bot.name, gender));
     api(`/bots/${bot.id}/localize-ui`, {
       method: 'POST',
       username,
       body: { language: 'el' },
     })
       .then((data) => {
-        applyCopy(data);
+        applyCopy(
+          personalizeUiCopy(
+            {
+              welcomeMessage: data.welcomeMessage,
+              suggestedQuestions: data.suggestedQuestions,
+            },
+            bot.name,
+            gender
+          )
+        );
       })
       .catch((err) => {
-        setUiError(err.message || t('test.translateError'));
+        if (!cancelled) {
+          setUiError(err.message || t('test.translateError'));
+          applyCopy(greekFallbackUiCopy(bot.name, gender));
+        }
       })
       .finally(() => {
         if (!cancelled) setUiLoading(false);
@@ -90,7 +123,7 @@ export default function BotTestPage() {
     return () => {
       cancelled = true;
     };
-  }, [bot, testLanguage, username]);
+  }, [bot, testLanguage, username, t]);
 
   const resetConversation = useCallback(() => {
     setResetSignal((value) => value + 1);
@@ -98,13 +131,16 @@ export default function BotTestPage() {
 
   const switchLanguage = useCallback(
     (language) => {
-      if (!bot) return;
+      if (!bot || language === testLanguage) return;
       const instant = uiCopyForBot(bot, language, bot.name);
       if (instant) setUiCopy(instant);
+      else if (language === 'el') {
+        setUiCopy(greekFallbackUiCopy(bot.name, bot.personaGender || 'neutral'));
+      }
       setTestLanguage(language);
       setResetSignal((value) => value + 1);
     },
-    [bot]
+    [bot, testLanguage]
   );
 
   if (error) return <p className="error-text">{error}</p>;
@@ -121,7 +157,7 @@ export default function BotTestPage() {
           )}
         </div>
 
-        {bot && (
+        {bot ? (
           <div className="test-toolbar">
             <div className="scrape-mode-toggle" role="group" aria-label={t('test.languageGroup')}>
               <button
@@ -144,7 +180,7 @@ export default function BotTestPage() {
               {t('test.reset')}
             </button>
           </div>
-        )}
+        ) : null}
       </div>
 
       {bot?.status && bot.status !== 'ready' && (
@@ -157,6 +193,8 @@ export default function BotTestPage() {
 
       {!bot ? (
         <p className="muted">{t('test.loadingBot')}</p>
+      ) : !uiCopy.welcomeMessage && uiLoading ? (
+        <p className="muted">{t('test.translating')}</p>
       ) : (
         <ChatbotBubble
           botName={bot.name}

@@ -7,6 +7,8 @@ export default function UnsavedChangesDialog({
   leaveLabel,
   saveLabel,
   busy = false,
+  showSave = true,
+  emphasizeStay = false,
   onStay,
   onLeave,
   onSave,
@@ -32,17 +34,26 @@ export default function UnsavedChangesDialog({
           {title}
         </h3>
         {message && <p className="confirm-dialog-message">{message}</p>}
-        <div className="confirm-dialog-actions confirm-dialog-actions--spread">
+        <div
+          className={`confirm-dialog-actions confirm-dialog-actions--spread${!showSave ? ' confirm-dialog-actions--single-row' : ''}`}
+        >
           <button type="button" className="btn btn-ghost" onClick={onLeave} disabled={busy}>
             {leaveLabel}
           </button>
           <div className="confirm-dialog-actions-main">
-            <button type="button" className="btn btn-secondary" onClick={onStay} disabled={busy}>
+            <button
+              type="button"
+              className={`btn ${emphasizeStay ? 'btn-accent' : 'btn-secondary'}`}
+              onClick={onStay}
+              disabled={busy}
+            >
               {stayLabel}
             </button>
-            <button type="button" className="btn btn-accent" onClick={onSave} disabled={busy}>
-              {saveLabel}
-            </button>
+            {showSave && onSave ? (
+              <button type="button" className="btn btn-accent" onClick={onSave} disabled={busy}>
+                {saveLabel}
+              </button>
+            ) : null}
           </div>
         </div>
       </div>

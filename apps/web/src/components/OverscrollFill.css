@@ -10,9 +10,11 @@
 .overscroll-fill--top {
   top: -100vh;
   background: var(--bg, #f3efe6);
+  transition: background-color 1.35s cubic-bezier(0.22, 1, 0.36, 1), background 1.35s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .overscroll-fill--bottom {
   bottom: -100vh;
   background: var(--bg-2, #ebe4d6);
+  transition: background-color 1.35s cubic-bezier(0.22, 1, 0.36, 1), background 1.35s cubic-bezier(0.22, 1, 0.36, 1);
 }

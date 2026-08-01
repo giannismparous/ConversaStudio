@@ -13,12 +13,32 @@ export default async function authRoutes(fastify) {
       request.headers['x-dev-user'] = username;
       await resolveDevUser(request, reply);
       if (reply.sent) return;
-      return { user: request.user, mode: 'dev' };
+      const row = request.user || {};
+      return {
+        user: {
+          id: row.id,
+          username: row.username,
+          email: row.email || null,
+          authProviderId: row.auth_provider_id || null,
+          createdAt: row.created_at || null,
+        },
+        mode: 'dev',
+      };
     });
   }
 
   fastify.get('/auth/me', { preHandler: resolveUser }, async (request) => {
-    return { user: request.user, mode: env.authMode };
+    const row = request.user || {};
+    return {
+      user: {
+        id: row.id,
+        username: row.username,
+        email: row.email || null,
+        authProviderId: row.auth_provider_id || null,
+        createdAt: row.created_at || null,
+      },
+      mode: env.authMode,
+    };
   });
 
   fastify.get('/auth/config', async () => ({

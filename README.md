@@ -1,4 +1,4 @@
-# ConversaStudio
+# DialogosAI
 
 Local multi-tenant platform to upload PDFs/URLs, build a Gemini embedding index, theme a Simasia-style chat widget, test in-app, and drop an embed script on any page.
 

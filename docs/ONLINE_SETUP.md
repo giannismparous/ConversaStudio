@@ -1,4 +1,4 @@
-# Going online with ConversaStudio
+# Going online with DialogosAI
 
 This guide splits work into **what is already wired in the repo** vs **what you must do** in Supabase, Render, and Netlify.
 

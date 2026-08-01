@@ -46,12 +46,14 @@ export class GeminiEmbedder {
 
 export class GeminiChatModel {
   /**
-   * @param {{ apiKey: string, model?: string }} opts
+   * @param {{ apiKey: string, model?: string, maxOutputTokens?: number, temperature?: number }} opts
    */
   constructor(opts) {
     if (!opts?.apiKey) throw new Error('GEMINI_API_KEY is required');
     this.apiKey = opts.apiKey;
     this.model = opts.model || 'gemini-flash-lite-latest';
+    this.maxOutputTokens = opts.maxOutputTokens ?? 1024;
+    this.temperature = opts.temperature ?? 0.4;
     this.genAI = new GoogleGenerativeAI(this.apiKey);
   }
 
@@ -59,8 +61,8 @@ export class GeminiChatModel {
     const model = this.genAI.getGenerativeModel({
       model: this.model,
       generationConfig: {
-        maxOutputTokens: 1024,
-        temperature: 0.4,
+        maxOutputTokens: this.maxOutputTokens,
+        temperature: this.temperature,
       },
     });
     const result = await model.generateContent(String(prompt || ''));

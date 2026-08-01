@@ -1,12 +1,12 @@
 import React from 'react';
 
-export const APP_NAME = 'ConversaStudio';
+export const APP_NAME = 'DialogosAI';
 
-/** Platform wordmark: Conversa + accent Studio (no space between words). */
+/** Platform wordmark: Dialogos + accent AI (no space). */
 export default function AppBrand() {
   return (
     <>
-      Conversa<span>Studio</span>
+      Dialogos<span>AI</span>
     </>
   );
 }

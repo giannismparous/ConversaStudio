@@ -71,7 +71,7 @@ export class BrowserRenderSession {
       const browser = await getBrowser();
       this.#context = await browser.newContext({
         userAgent:
-          'Mozilla/5.0 (compatible; ConversaStudioBot/0.1; +https://conversastudio.netlify.app)',
+          'Mozilla/5.0 (compatible; DialogosAIBot/0.1; +https://conversastudio.netlify.app)',
         locale: 'el-GR',
         viewport: { width: 1280, height: 720 },
       });
@@ -94,6 +94,41 @@ export class BrowserRenderSession {
         .catch(() => {});
       await new Promise((r) => setTimeout(r, 1000));
       return { html: await page.content(), finalUrl: page.url() };
+    } finally {
+      await page.close();
+    }
+  }
+
+  /** Collect same-document navigable hrefs after JS hydration (for SPA page counts). */
+  async collectHrefs(url, { timeoutMs = 18000 } = {}) {
+    if (!this.#context) {
+      const browser = await getBrowser();
+      this.#context = await browser.newContext({
+        userAgent:
+          'Mozilla/5.0 (compatible; DialogosAIBot/0.1; +https://conversastudio.netlify.app)',
+        locale: 'el-GR',
+        viewport: { width: 1280, height: 720 },
+      });
+    }
+    const page = await this.#context.newPage();
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+      await page
+        .waitForFunction(
+          () => (document.body?.innerText?.replace(/\s+/g, ' ').trim() || '').length > 40,
+          { timeout: Math.min(12000, timeoutMs) }
+        )
+        .catch(() => {});
+      await new Promise((r) => setTimeout(r, 800));
+      const hrefs = await page.evaluate(() => {
+        const out = [];
+        for (const a of document.querySelectorAll('a[href]')) {
+          const href = a.href;
+          if (href) out.push(href);
+        }
+        return out;
+      });
+      return { hrefs, finalUrl: page.url(), html: await page.content() };
     } finally {
       await page.close();
     }

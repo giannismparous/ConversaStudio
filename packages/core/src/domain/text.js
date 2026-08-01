@@ -25,10 +25,50 @@ export function normalizeUrl(url) {
     throw new Error('invalid_url');
   }
   u.hash = '';
+  u.username = '';
+  u.password = '';
+  // Canonical host: lowercase + drop leading www.
+  u.hostname = u.hostname.toLowerCase();
+  if (u.hostname.startsWith('www.')) {
+    u.hostname = u.hostname.slice(4);
+  }
+  // Drop common tracking / session noise so near-duplicate URLs collapse.
+  const drop = [
+    'utm_source',
+    'utm_medium',
+    'utm_campaign',
+    'utm_term',
+    'utm_content',
+    'utm_id',
+    'fbclid',
+    'gclid',
+    'gbraid',
+    'wbraid',
+    'mc_cid',
+    'mc_eid',
+    'msclkid',
+    '_ga',
+    '_gl',
+    'ref',
+    'ref_src',
+  ];
+  for (const key of drop) u.searchParams.delete(key);
+  // Stable query order for identical param sets.
+  const entries = [...u.searchParams.entries()].sort((a, b) =>
+    a[0] === b[0] ? a[1].localeCompare(b[1]) : a[0].localeCompare(b[0])
+  );
+  u.search = '';
+  for (const [k, v] of entries) u.searchParams.append(k, v);
   if (u.pathname.endsWith('/') && u.pathname.length > 1) {
     u.pathname = u.pathname.slice(0, -1);
   }
   return u.toString();
+}
+
+/** Host key for same-site checks (ignores www / protocol). */
+export function siteOriginKey(url) {
+  const u = new URL(normalizeUrl(url));
+  return u.hostname.toLowerCase();
 }
 
 export function urlDisplayLabel(url) {

@@ -1,9 +1,31 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { DefaultAvatar } from '@dialogos-forge/chat-widget';
 import { useI18n } from '../lib/i18n.jsx';
+import {
+  greekFallbackUiCopy,
+  normalizeSuggestedQuestions,
+  resolveTestUiCopy,
+} from '../lib/testUiLocalize.js';
 
 function safeHex(value, fallback) {
   return /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
+}
+
+function luminance(hex) {
+  const h = safeHex(hex, '#141413').slice(1);
+  const toLin = (c) => {
+    const v = parseInt(c, 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  return (
+    0.2126 * toLin(h.slice(0, 2)) +
+    0.7152 * toLin(h.slice(2, 4)) +
+    0.0722 * toLin(h.slice(4, 6))
+  );
+}
+
+function onColor(bg) {
+  return luminance(bg) > 0.55 ? '#141413' : '#faf9f5';
 }
 
 export default function ThemePreview({
@@ -11,16 +33,42 @@ export default function ThemePreview({
   botName = '',
   iconUrl,
   welcomeMessage = '',
+  suggestedQuestions = [],
+  personaGender = 'neutral',
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const panelBg = safeHex(theme.panelBg, '#faf9f5');
   const accent = safeHex(theme.accent, '#d97757');
   const launcherBg = safeHex(theme.launcherBg, '#ffffff');
   const textColor = safeHex(theme.textColor, '#141413');
+  const onText = onColor(textColor);
 
   const displayName = botName?.trim() || t('editor.previewAssistant');
-  const welcomeRaw = String(welcomeMessage || '').trim() || t('editor.previewWelcome');
+
+  const localized = useMemo(() => {
+    const language = locale === 'el' ? 'el' : 'en';
+    const questions = normalizeSuggestedQuestions(suggestedQuestions);
+    const instant = resolveTestUiCopy({
+      welcomeMessage,
+      suggestedQuestions: questions,
+      language,
+      botName: displayName,
+      personaGender,
+    });
+    if (instant) return instant;
+    if (language === 'el') return greekFallbackUiCopy(displayName, personaGender);
+    return {
+      welcomeMessage: String(welcomeMessage || '').trim(),
+      suggestedQuestions: questions,
+    };
+  }, [locale, welcomeMessage, suggestedQuestions, displayName, personaGender]);
+
+  const welcomeRaw =
+    String(localized.welcomeMessage || '').trim() || t('editor.previewWelcome');
   const welcome = welcomeRaw.length > 72 ? `${welcomeRaw.slice(0, 71)}…` : welcomeRaw;
+  const sampleChip =
+    (localized.suggestedQuestions || []).map((q) => String(q || '').trim()).find(Boolean) ||
+    t('editor.previewSampleQuestion');
 
   return (
     <div className="theme-preview" aria-hidden="true">
@@ -32,6 +80,7 @@ export default function ThemePreview({
             '--tp-panel': panelBg,
             '--tp-accent': accent,
             '--tp-text': textColor,
+            '--tp-on-text': onText,
           }}
         >
           <div className="theme-preview-header">
@@ -48,7 +97,7 @@ export default function ThemePreview({
           <div className="theme-preview-body">
             <p className="theme-preview-welcome">{welcome}</p>
             <div className="theme-preview-chips">
-              <span className="theme-preview-chip">{t('editor.previewSampleQuestion')}</span>
+              <span className="theme-preview-chip">{sampleChip}</span>
             </div>
             <div className="theme-preview-user-bubble">{t('editor.previewUserBubble')}</div>
           </div>

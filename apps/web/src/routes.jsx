@@ -4,6 +4,7 @@ import { useAuth } from './lib/auth.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import BotsPage from './pages/BotsPage.jsx';
 import BotEditorPage from './pages/BotEditorPage.jsx';
+import BotCreateWizardPage from './pages/BotCreateWizardPage.jsx';
 import BotTestPage from './pages/BotTestPage.jsx';
 import EmbedDemoPage from './pages/EmbedDemoPage.jsx';
 import Shell from './components/Shell.jsx';
@@ -45,7 +46,7 @@ export const router = createBrowserRouter([
             children: [
               { index: true, element: <Navigate to="/bots" replace /> },
               { path: 'bots', element: <BotsPage /> },
-              { path: 'bots/new', element: <BotEditorPage /> },
+              { path: 'bots/new', element: <BotCreateWizardPage /> },
               { path: 'bots/:id', element: <BotEditorPage /> },
               { path: 'bots/:id/test', element: <BotTestPage /> },
             ],

@@ -59,7 +59,7 @@ app.get('/health', async () => ({
 
 app.get('/', async () => ({
   ok: true,
-  service: 'conversastudio-api',
+  service: 'dialogosai-api',
   health: '/health',
 }));
 
@@ -76,7 +76,7 @@ try {
 }
 
 await app.listen({ port: env.apiPort, host: env.apiHost });
-console.log(`ConversaStudio API on http://localhost:${env.apiPort} (${env.authMode})`);
+console.log(`DialogosAI API on http://localhost:${env.apiPort} (${env.authMode})`);
 
 async function shutdown() {
   await closeBrowser().catch(() => {});

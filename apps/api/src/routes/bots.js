@@ -4,11 +4,15 @@ import {
   slugify,
   sha256,
   normalizeUrl,
+  siteOriginKey,
   estimateTokens,
   urlDisplayLabel,
   fileDisplayLabel,
+  computeBuildFingerprint,
+  botNeedsRebuild,
+  probeUrl,
 } from '@dialogos-forge/core';
-import { pool, objectStore, env, vectorStore, getEmbedder } from '../config.js';
+import { pool, objectStore, env, vectorStore, getEmbedder, urlFetcher } from '../config.js';
 import {
   resolveUser,
   requireBotOwner,
@@ -16,10 +20,11 @@ import {
   mapSource,
   mapJob,
 } from '../services/auth.js';
-import { enqueueBuild } from '../services/buildService.js';
+import { enqueueBuild, getJobHint } from '../services/buildService.js';
 import { answerBotChat } from '../services/chatService.js';
 import { normalizeSourceCitations } from '../services/sourceCitations.js';
 import { localizeBotUiCopy } from '../services/uiLocalizeService.js';
+import { inferPersonaGender } from '../services/genderInferService.js';
 
 function parseJsonArray(value) {
   if (Array.isArray(value)) return value;
@@ -40,10 +45,101 @@ function normalizeGender(value) {
   return 'neutral';
 }
 
-async function markBotDirty(botId) {
-  await pool.query(
-    `UPDATE bots SET status = CASE WHEN status = 'ready' THEN 'draft' ELSE status END, updated_at = NOW() WHERE id = $1`,
+function mapBotWithRebuild(row, sources = []) {
+  const needsRebuild = botNeedsRebuild({
+    lastBuiltAt: row.last_built_at,
+    buildFingerprint: row.build_fingerprint,
+    status: row.status,
+    sources,
+  });
+  return mapBot({ ...row, needs_rebuild: needsRebuild });
+}
+
+async function loadBotSources(botId) {
+  const { rows } = await pool.query(
+    'SELECT * FROM sources WHERE bot_id = $1 ORDER BY created_at ASC',
     [botId]
+  );
+  return rows;
+}
+
+/** Keep ready bots on the current sources-only fingerprint (formula heal / post-delete). */
+async function ensureBuildFingerprintBackfill(row, sources) {
+  if (!row?.last_built_at || row.status === 'building') return row;
+  const fp = computeBuildFingerprint({ sources });
+  if (row.build_fingerprint === fp) return row;
+  // Ready bots: heal v1→v2 / fingerprint drift without forcing a rebuild.
+  if (row.status === 'ready') {
+    await pool.query(`UPDATE bots SET build_fingerprint = $2 WHERE id = $1`, [row.id, fp]);
+    return { ...row, build_fingerprint: fp };
+  }
+  return row;
+}
+
+/** After source additions/changes: dirty if fingerprint moved, restore ready if it matches again. */
+async function refreshBotRebuildState(botId) {
+  const { rows } = await pool.query('SELECT * FROM bots WHERE id = $1', [botId]);
+  const bot = rows[0];
+  if (!bot || bot.status === 'building') return;
+
+  const sources = await loadBotSources(botId);
+  const current = computeBuildFingerprint({ sources });
+
+  if (bot.last_built_at && bot.build_fingerprint && current === bot.build_fingerprint) {
+    await pool.query(
+      `UPDATE bots
+       SET status = CASE
+             WHEN status IN ('draft', 'error') AND COALESCE(chunk_count, 0) > 0 THEN 'ready'
+             ELSE status
+           END,
+           build_error = CASE
+             WHEN status = 'error' AND COALESCE(chunk_count, 0) > 0 THEN NULL
+             ELSE build_error
+           END,
+           updated_at = NOW()
+       WHERE id = $1 AND status <> 'building'`,
+      [botId]
+    );
+    return;
+  }
+
+  if (bot.last_built_at) {
+    await pool.query(
+      `UPDATE bots
+       SET status = CASE WHEN status = 'ready' THEN 'draft' ELSE status END,
+           updated_at = NOW()
+       WHERE id = $1 AND status <> 'building'`,
+      [botId]
+    );
+  }
+}
+
+/** After removing sources/chunks: adopt the new fingerprint so no rebuild is required. */
+async function syncFingerprintAfterRemoval(botId) {
+  const { rows } = await pool.query('SELECT * FROM bots WHERE id = $1', [botId]);
+  const bot = rows[0];
+  if (!bot || bot.status === 'building') return;
+
+  const sources = await loadBotSources(botId);
+  const fp = computeBuildFingerprint({ sources });
+  const { rows: countRows } = await pool.query(
+    'SELECT COUNT(*)::int AS n FROM chunks WHERE bot_id = $1',
+    [botId]
+  );
+  const chunkCount = countRows[0]?.n || 0;
+
+  await pool.query(
+    `UPDATE bots
+     SET build_fingerprint = $2,
+         chunk_count = $3,
+         status = CASE
+           WHEN status = 'building' THEN status
+           WHEN $3 > 0 AND last_built_at IS NOT NULL THEN 'ready'
+           ELSE status
+         END,
+         updated_at = NOW()
+     WHERE id = $1 AND status <> 'building'`,
+    [botId, fp, chunkCount]
   );
 }
 
@@ -84,8 +180,8 @@ async function insertSourceOrConflict(
     });
   }
 
-  // Atomic page already indexed by a prior site/page scrape
-  if (type === 'url' && scrapeMode === 'page') {
+  // Same seed URL only once per bot, regardless of page vs site mode.
+  if (type === 'url') {
     const { rows: sameUri } = await pool.query(
       `SELECT id, label, scrape_mode FROM sources
        WHERE bot_id = $1 AND type = 'url' AND uri = $2`,
@@ -101,54 +197,79 @@ async function insertSourceOrConflict(
       });
     }
 
-    const { rows: pages } = await pool.query(
-      'SELECT page_url, source_id FROM bot_pages WHERE bot_id = $1 AND page_url = $2',
-      [botId, uri]
-    );
-    if (pages[0]) {
-      return reply.code(409).send({
-        error: 'duplicate_page',
-        message: `This page is already indexed by another source (${pages[0].page_url})`,
-      });
-    }
-  }
-
-  // Only one full-site scrape per origin
-  if (type === 'url' && scrapeMode === 'site') {
-    let origin;
-    try {
-      origin = new URL(uri).origin;
-    } catch {
-      origin = uri;
-    }
-    const { rows: sites } = await pool.query(
-      `SELECT id, uri, label FROM sources
-       WHERE bot_id = $1 AND type = 'url' AND scrape_mode = 'site'`,
-      [botId]
-    );
-    const clash = sites.find((s) => {
-      try {
-        return new URL(s.uri).origin === origin;
-      } catch {
-        return false;
+    if (scrapeMode === 'page') {
+      const { rows: pages } = await pool.query(
+        'SELECT page_url, source_id FROM bot_pages WHERE bot_id = $1 AND page_url = $2',
+        [botId, uri]
+      );
+      if (pages[0]) {
+        return reply.code(409).send({
+          error: 'duplicate_page',
+          message: `This page is already indexed by another source (${pages[0].page_url})`,
+        });
       }
-    });
-    if (clash) {
-      return reply.code(409).send({
-        error: 'duplicate_site_scrape',
-        message: `A full-site scrape for this domain already exists (${clash.label || clash.uri})`,
-      });
+    }
+
+    // Only one full-site scrape per host (ignores www / http vs https).
+    if (scrapeMode === 'site') {
+      let hostKey;
+      try {
+        hostKey = siteOriginKey(uri);
+      } catch {
+        hostKey = null;
+      }
+      if (hostKey) {
+        const { rows: sites } = await pool.query(
+          `SELECT id, uri, label FROM sources
+           WHERE bot_id = $1 AND type = 'url' AND scrape_mode = 'site'`,
+          [botId]
+        );
+        const clash = sites.find((s) => {
+          try {
+            return siteOriginKey(s.uri) === hostKey;
+          } catch {
+            return false;
+          }
+        });
+        if (clash) {
+          return reply.code(409).send({
+            error: 'duplicate_site_scrape',
+            message: `A full-site scrape for this domain already exists (${clash.label || clash.uri})`,
+          });
+        }
+      }
     }
   }
 
-  const { rows } = await pool.query(
-    `INSERT INTO sources (bot_id, type, label, uri, content_hash, status, byte_size, scrape_mode)
-     VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7)
-     RETURNING *`,
-    [botId, type, label, uri, contentHash, byteSize, scrapeMode]
-  );
-  await markBotDirty(botId);
-  return { source: mapSource(rows[0]) };
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO sources (bot_id, type, label, uri, content_hash, status, byte_size, scrape_mode)
+       VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7)
+       RETURNING *`,
+      [botId, type, label, uri, contentHash, byteSize, scrapeMode]
+    );
+    await refreshBotRebuildState(botId);
+    return { source: mapSource(rows[0]) };
+  } catch (err) {
+    if (err?.code === '23505') {
+      const { rows: again } = await pool.query(
+        'SELECT * FROM sources WHERE bot_id = $1 AND content_hash = $2',
+        [botId, contentHash]
+      );
+      if (again[0]) {
+        return reply.code(409).send({
+          error: 'duplicate_source',
+          message: 'This source is already attached to the bot',
+          source: mapSource(again[0]),
+        });
+      }
+      return reply.code(409).send({
+        error: 'duplicate_source',
+        message: 'This source is already attached to the bot',
+      });
+    }
+    throw err;
+  }
 }
 
 async function uniqueSlug(ownerId, baseName) {
@@ -179,6 +300,22 @@ export default async function botRoutes(fastify) {
       [request.user.id]
     );
     return { bots: rows.map(mapBot) };
+  });
+
+  fastify.get('/bots/check-name', async (request) => {
+    const name = String(request.query?.name || '').trim();
+    if (!name) return { available: true, name: '' };
+    const excludeId = String(request.query?.excludeId || '').trim() || null;
+    const { rows } = excludeId
+      ? await pool.query(
+          'SELECT 1 FROM bots WHERE owner_id = $1 AND lower(name) = lower($2) AND id <> $3 LIMIT 1',
+          [request.user.id, name, excludeId]
+        )
+      : await pool.query(
+          'SELECT 1 FROM bots WHERE owner_id = $1 AND lower(name) = lower($2) LIMIT 1',
+          [request.user.id, name]
+        );
+    return { available: rows.length === 0, name };
   });
 
   fastify.post('/bots', async (request, reply) => {
@@ -213,8 +350,8 @@ export default async function botRoutes(fastify) {
     const personaGender = normalizeGender(request.body?.personaGender ?? 'neutral');
 
     const { rows } = await pool.query(
-      `INSERT INTO bots (owner_id, name, slug, theme, system_prompt, welcome_message, suggested_questions, rules, persona_gender, key_facts, source_citations)
-       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8::jsonb, $9, $10::jsonb, $11::jsonb)
+      `INSERT INTO bots (owner_id, name, slug, theme, system_prompt, welcome_message, suggested_questions, rules, persona_gender, key_facts, source_citations, listed)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8::jsonb, $9, $10::jsonb, $11::jsonb, FALSE)
        RETURNING *`,
       [
         request.user.id,
@@ -240,16 +377,14 @@ export default async function botRoutes(fastify) {
   fastify.get('/bots/:id', async (request, reply) => {
     const bot = await requireBotOwner(request, reply, request.params.id);
     if (!bot) return;
-    const { rows: sources } = await pool.query(
-      'SELECT * FROM sources WHERE bot_id = $1 ORDER BY created_at ASC',
-      [bot.id]
-    );
+    const sources = await loadBotSources(bot.id);
+    const row = await ensureBuildFingerprintBackfill(bot, sources);
     const { rows: jobs } = await pool.query(
       'SELECT * FROM build_jobs WHERE bot_id = $1 ORDER BY created_at DESC LIMIT 5',
       [bot.id]
     );
     return {
-      bot: mapBot(bot),
+      bot: mapBotWithRebuild(row, sources),
       sources: sources.map(mapSource),
       jobs: jobs.map(mapJob),
     };
@@ -311,7 +446,7 @@ export default async function botRoutes(fastify) {
         body.iconUrl === undefined ? null : body.iconUrl,
         body.systemPrompt === undefined ? null : body.systemPrompt,
         body.welcomeMessage === undefined ? null : body.welcomeMessage,
-        body.suggestedQuestions
+        body.suggestedQuestions !== undefined
           ? JSON.stringify(body.suggestedQuestions)
           : null,
         body.personaGender === undefined
@@ -322,7 +457,12 @@ export default async function botRoutes(fastify) {
         JSON.stringify(sourceCitations),
       ]
     );
-    return { bot: mapBot(rows[0]) };
+    if (body.keyFacts !== undefined) {
+      const sources = await loadBotSources(bot.id);
+      return { bot: mapBotWithRebuild(rows[0], sources) };
+    }
+    const sources = await loadBotSources(bot.id);
+    return { bot: mapBotWithRebuild(rows[0], sources) };
   });
 
   fastify.delete('/bots/:id', async (request, reply) => {
@@ -350,8 +490,8 @@ export default async function botRoutes(fastify) {
 
     const slug = await uniqueSlug(request.user.id, baseName);
     const { rows } = await pool.query(
-      `INSERT INTO bots (owner_id, name, slug, theme, icon_url, system_prompt, welcome_message, suggested_questions, rules, persona_gender, key_facts, source_citations, status)
-       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11::jsonb, $12::jsonb, 'draft')
+      `INSERT INTO bots (owner_id, name, slug, theme, icon_url, system_prompt, welcome_message, suggested_questions, rules, persona_gender, key_facts, source_citations, status, listed)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11::jsonb, $12::jsonb, 'draft', TRUE)
        RETURNING *`,
       [
         request.user.id,
@@ -435,6 +575,17 @@ export default async function botRoutes(fastify) {
     }
 
     const contentHash = sha256(buf);
+    const dup = await pool.query(
+      'SELECT * FROM sources WHERE bot_id = $1 AND content_hash = $2',
+      [bot.id, contentHash]
+    );
+    if (dup.rows[0]) {
+      return reply.code(409).send({
+        error: 'duplicate_source',
+        message: 'This source is already attached to the bot',
+        source: mapSource(dup.rows[0]),
+      });
+    }
     const key = `${bot.id}/${uuidv4()}-${label}`;
     await objectStore.put(key, buf, file.mimetype || 'application/octet-stream');
     const uri = `/files/${key}`;
@@ -455,6 +606,17 @@ export default async function botRoutes(fastify) {
       String(request.body?.label || '').trim() ||
       `Pasted text ${new Date().toISOString().slice(0, 16)}`;
     const contentHash = sha256(text);
+    const dup = await pool.query(
+      'SELECT * FROM sources WHERE bot_id = $1 AND content_hash = $2',
+      [bot.id, contentHash]
+    );
+    if (dup.rows[0]) {
+      return reply.code(409).send({
+        error: 'duplicate_source',
+        message: 'This source is already attached to the bot',
+        source: mapSource(dup.rows[0]),
+      });
+    }
     const key = `${bot.id}/${uuidv4()}-paste.txt`;
     const buf = Buffer.from(text, 'utf8');
     await objectStore.put(key, buf, 'text/plain');
@@ -473,11 +635,10 @@ export default async function botRoutes(fastify) {
     }
 
     const scrapeMode = request.body?.scrapeMode === 'site' ? 'site' : 'page';
-    // Hash includes mode so same URL can exist once as page and once as site? 
-    // Prefer forbidding: same URL seed only once regardless of mode.
-    const contentHash = sha256(`${scrapeMode}:${url}`);
+    // Hash by normalized URL only so page/site cannot both claim the same seed.
+    const contentHash = sha256(url);
     const label = request.body?.label || urlDisplayLabel(url);
-    return insertSourceOrConflict(
+    const result = await insertSourceOrConflict(
       reply,
       bot.id,
       'url',
@@ -487,6 +648,47 @@ export default async function botRoutes(fastify) {
       0,
       scrapeMode
     );
+    if (reply.sent) return result;
+
+    const source = result?.source;
+    if (!source?.id) return result;
+
+    const probe = await probeUrl(source.uri || url);
+    if (!probe.ok) {
+      const { rows } = await pool.query(
+        `UPDATE sources
+         SET status = 'skipped',
+             error_message = $2,
+             page_count = 0
+         WHERE id = $1
+         RETURNING *`,
+        [source.id, probe.reason || 'Unreachable page']
+      );
+      await refreshBotRebuildState(bot.id);
+      return { source: mapSource(rows[0] || source) };
+    }
+
+    let pageCount = scrapeMode === 'site' ? 0 : 1;
+    if (scrapeMode === 'site') {
+      try {
+        const maxPages = Number(process.env.SITE_CRAWL_MAX_PAGES || 40);
+        pageCount = await urlFetcher.countSitePages(source.uri || url, { maxPages });
+      } catch {
+        pageCount = 0;
+      }
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE sources
+       SET status = 'pending',
+           page_count = $2,
+           error_message = NULL
+       WHERE id = $1
+       RETURNING *`,
+      [source.id, pageCount]
+    );
+    await refreshBotRebuildState(bot.id);
+    return { source: mapSource(rows[0] || source) };
   });
 
   fastify.patch('/bots/:id/sources/:sourceId', async (request, reply) => {
@@ -518,33 +720,35 @@ export default async function botRoutes(fastify) {
     }
 
     if (scrapeMode === 'site') {
-      let origin;
+      let hostKey;
       try {
-        origin = new URL(source.uri).origin;
+        hostKey = siteOriginKey(source.uri);
       } catch {
-        origin = source.uri;
+        hostKey = null;
       }
-      const { rows: sites } = await pool.query(
-        `SELECT id, uri, label FROM sources
-         WHERE bot_id = $1 AND type = 'url' AND scrape_mode = 'site' AND id <> $2`,
-        [bot.id, source.id]
-      );
-      const clash = sites.find((s) => {
-        try {
-          return new URL(s.uri).origin === origin;
-        } catch {
-          return false;
-        }
-      });
-      if (clash) {
-        return reply.code(409).send({
-          error: 'duplicate_site_scrape',
-          message: `A full-site scrape for this domain already exists (${clash.label || clash.uri})`,
+      if (hostKey) {
+        const { rows: sites } = await pool.query(
+          `SELECT id, uri, label FROM sources
+           WHERE bot_id = $1 AND type = 'url' AND scrape_mode = 'site' AND id <> $2`,
+          [bot.id, source.id]
+        );
+        const clash = sites.find((s) => {
+          try {
+            return siteOriginKey(s.uri) === hostKey;
+          } catch {
+            return false;
+          }
         });
+        if (clash) {
+          return reply.code(409).send({
+            error: 'duplicate_site_scrape',
+            message: `A full-site scrape for this domain already exists (${clash.label || clash.uri})`,
+          });
+        }
       }
     }
 
-    const contentHash = sha256(`${scrapeMode}:${source.uri}`);
+    const contentHash = sha256(source.uri);
     const { rows: hashClash } = await pool.query(
       'SELECT id FROM sources WHERE bot_id = $1 AND content_hash = $2 AND id <> $3',
       [bot.id, contentHash, source.id]
@@ -565,7 +769,7 @@ export default async function botRoutes(fastify) {
        RETURNING *`,
       [source.id, scrapeMode, contentHash, label]
     );
-    await markBotDirty(bot.id);
+    await refreshBotRebuildState(bot.id);
     return { source: mapSource(updated[0]) };
   });
 
@@ -587,16 +791,12 @@ export default async function botRoutes(fastify) {
       bot.id,
     ]);
 
-    const chunkCount = await vectorStore.countByBot(bot.id);
-    await pool.query(
-      `UPDATE bots
-       SET chunk_count = $2,
-           status = CASE WHEN status = 'ready' THEN 'draft' ELSE status END,
-           updated_at = NOW()
-       WHERE id = $1`,
-      [bot.id, chunkCount]
+    await syncFingerprintAfterRemoval(bot.id);
+    const { rows: countRows } = await pool.query(
+      'SELECT chunk_count FROM bots WHERE id = $1',
+      [bot.id]
     );
-    return { ok: true, chunkCount };
+    return { ok: true, chunkCount: countRows[0]?.chunk_count || 0 };
   });
 
   fastify.post('/bots/:id/icon', async (request, reply) => {
@@ -633,6 +833,16 @@ export default async function botRoutes(fastify) {
   fastify.post('/bots/:id/build', async (request, reply) => {
     const bot = await requireBotOwner(request, reply, request.params.id);
     if (!bot) return;
+    const { rows: sourceCount } = await pool.query(
+      'SELECT COUNT(*)::int AS n FROM sources WHERE bot_id = $1',
+      [bot.id]
+    );
+    if (!(sourceCount[0]?.n > 0)) {
+      return reply.code(400).send({
+        error: 'sources_required',
+        message: 'Add at least one PDF, text, or URL before building',
+      });
+    }
     const mode = request.body?.mode === 'full' ? 'full' : 'adaptive';
     const job = await enqueueBuild(bot.id, mode);
     return { job: mapJob(job) };
@@ -649,13 +859,13 @@ export default async function botRoutes(fastify) {
     const { rows: botRows } = await pool.query('SELECT * FROM bots WHERE id = $1', [
       bot.id,
     ]);
-    const { rows: sources } = await pool.query(
-      'SELECT * FROM sources WHERE bot_id = $1 ORDER BY created_at ASC',
-      [bot.id]
-    );
+    const sources = await loadBotSources(bot.id);
     return {
-      job: mapJob(rows[0]),
-      bot: mapBot(botRows[0]),
+      job: {
+        ...mapJob(rows[0]),
+        ...(getJobHint(rows[0].id) || {}),
+      },
+      bot: mapBotWithRebuild(botRows[0], sources),
       sources: sources.map(mapSource),
     };
   });
@@ -758,7 +968,6 @@ export default async function botRoutes(fastify) {
 
     await pool.query('DELETE FROM chunks WHERE id = $1', [rows[0].id]);
     const chunkCount = await syncChunkCounts(bot.id, rows[0].sourceId);
-    await markBotDirty(bot.id);
     return { ok: true, chunkCount };
   });
 
@@ -773,12 +982,17 @@ export default async function botRoutes(fastify) {
     if (!rows[0]) return reply.code(404).send({ error: 'source_not_found' });
 
     await vectorStore.deleteBySource(request.params.sourceId);
+    await pool.query('DELETE FROM bot_pages WHERE source_id = $1', [
+      request.params.sourceId,
+    ]);
+    await pool.query('DELETE FROM chunks WHERE source_id = $1', [
+      request.params.sourceId,
+    ]);
     await pool.query(
-      `UPDATE sources SET chunk_count = 0, status = 'pending', error_message = NULL WHERE id = $1`,
+      `UPDATE sources SET chunk_count = 0, page_count = 0, status = 'pending', error_message = NULL WHERE id = $1`,
       [request.params.sourceId]
     );
     const chunkCount = await syncChunkCounts(bot.id, request.params.sourceId);
-    await markBotDirty(bot.id);
     return { ok: true, chunkCount };
   });
 
@@ -811,6 +1025,7 @@ export default async function botRoutes(fastify) {
         suggestedQuestions,
         language,
         botName: bot.name,
+        personaGender: bot.persona_gender || 'neutral',
       });
       return result;
     } catch (err) {
@@ -819,5 +1034,39 @@ export default async function botRoutes(fastify) {
         message: err.message,
       });
     }
+  });
+
+  fastify.post('/persona-gender', async (request, reply) => {
+    const name = String(request.body?.name || '').trim();
+    if (!name) return reply.code(400).send({ error: 'name_required' });
+    try {
+      const result = await inferPersonaGender(name);
+      return {
+        personaGender: result.personaGender,
+        source: result.source,
+      };
+    } catch (err) {
+      return reply.code(err.statusCode || 500).send({
+        error: 'gender_infer_failed',
+        message: err.message,
+      });
+    }
+  });
+
+  /** Clears shared name→gender cache (keeps DialogosAI=neutral seed). */
+  fastify.delete('/persona-gender', async () => {
+    await pool.query(
+      `DELETE FROM persona_gender_defaults WHERE name_key <> 'dialogosai'`
+    );
+    await pool.query(
+      `INSERT INTO persona_gender_defaults (name_key, display_name, persona_gender)
+       VALUES ('dialogosai', 'DialogosAI', 'neutral')
+       ON CONFLICT (name_key) DO UPDATE
+         SET persona_gender = 'neutral', display_name = 'DialogosAI', updated_at = NOW()`
+    );
+    const { rows } = await pool.query(
+      `SELECT name_key, persona_gender FROM persona_gender_defaults ORDER BY name_key`
+    );
+    return { ok: true, remaining: rows };
   });
 }

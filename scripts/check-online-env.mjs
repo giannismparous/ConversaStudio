@@ -55,7 +55,7 @@ function need(key) {
   console.log(`✓ ${key}`);
 }
 
-console.log(`\nConversaStudio online check (AUTH_MODE=${authMode}, STORAGE_MODE=${storageMode})\n`);
+console.log(`\nDialogosAI online check (AUTH_MODE=${authMode}, STORAGE_MODE=${storageMode})\n`);
 
 for (const key of required) need(key);
 

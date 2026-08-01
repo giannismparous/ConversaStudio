@@ -87,8 +87,17 @@ export async function verifySupabaseAccessToken(token) {
       issuer: `${env.supabaseUrl}/auth/v1`,
     });
     const sub = String(payload.sub || '');
-    const email = typeof payload.email === 'string' ? payload.email : '';
+    const email = typeof payload.email === 'string' ? payload.email.trim() : '';
     if (!sub) throw new Error('invalid_token');
+    // Access tokens sometimes omit email — pull it from Auth API when missing.
+    if (!email) {
+      try {
+        const fromApi = await verifyViaAuthApi(token);
+        return { sub, email: fromApi.email || '' };
+      } catch {
+        return { sub, email: '' };
+      }
+    }
     return { sub, email };
   } catch {
     return verifyViaAuthApi(token);
@@ -225,6 +234,9 @@ export function mapBot(row) {
     })(),
     buildError: row.build_error,
     lastBuiltAt: row.last_built_at,
+    buildFingerprint: row.build_fingerprint || null,
+    needsRebuild: row.needs_rebuild === true,
+    listed: row.listed !== false,
     chunkCount: row.chunk_count,
     sourceCount:
       row.source_count !== undefined && row.source_count !== null
@@ -249,6 +261,7 @@ export function mapSource(row) {
     scrapeMode: row.scrape_mode || 'page',
     showInCitations: row.show_in_citations !== false,
     chunkCount: row.chunk_count || 0,
+    pageCount: row.page_count || 0,
     createdAt: row.created_at,
   };
 }

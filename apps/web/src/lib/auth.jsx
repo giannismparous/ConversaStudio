@@ -10,6 +10,7 @@ import { api } from './api.js';
 import { setApiAuth } from './apiAuth.js';
 import { isSupabaseAuth } from './authMode.js';
 import { assertSupabaseClient } from './supabase.js';
+import { bindWizardUser } from './wizardSession.js';
 
 const AuthContext = createContext(null);
 const STORAGE_KEY = 'df_username';
@@ -46,6 +47,12 @@ export function AuthProvider({ children }) {
     });
   }, [username, accessToken, getAccessToken]);
 
+  useEffect(() => {
+    if (!ready) return;
+    const key = user?.id || user?.username || username || '';
+    bindWizardUser(key);
+  }, [ready, user?.id, user?.username, username]);
+
   const loginDev = useCallback(async (clean) => {
     const data = await api('/auth/dev-login', {
       method: 'POST',
@@ -62,8 +69,18 @@ export function AuthProvider({ children }) {
       return;
     }
     setAccessToken(session.access_token);
+    const sessionEmail = String(session.user?.email || '').trim();
     const data = await fetchMe({ token: session.access_token });
-    setUser(data.user);
+    const apiUser = data.user || null;
+    if (!apiUser) {
+      setUser(sessionEmail ? { email: sessionEmail } : null);
+      return;
+    }
+    // Prefer DB email, fall back to the Supabase session registration email.
+    setUser({
+      ...apiUser,
+      email: String(apiUser.email || sessionEmail || '').trim() || null,
+    });
   }, []);
 
   useEffect(() => {
@@ -151,6 +168,7 @@ export function AuthProvider({ children }) {
       ready,
       user,
       username: user?.username || username,
+      email: String(user?.email || '').trim(),
       authMode: isSupabaseAuth ? 'supabase' : 'dev',
       authError,
       clearAuthError: () => setAuthError(''),
@@ -211,6 +229,7 @@ export function AuthProvider({ children }) {
         return true;
       },
       logout: async () => {
+        bindWizardUser('');
         if (isSupabaseAuth) {
           const client = assertSupabaseClient();
           await client.auth.signOut();

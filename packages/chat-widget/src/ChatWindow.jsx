@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import DefaultAvatar from './DefaultAvatar.jsx';
+import SourceTypeIcon from './SourceTypeIcon.jsx';
+import { themeCssVars } from './themeVars.js';
 import './ChatWindow.css';
 
 const msgEase = [0.16, 1, 0.3, 1];
@@ -80,13 +82,7 @@ export default function ChatWindow({
   const isIdle = !hasConversation;
   const welcomeText = String(welcomeMessage || '').trim();
 
-  const themeStyle = {
-    '--df-panel-bg': theme.panelBg || '#faf9f5',
-    '--df-accent': accent,
-    '--df-launcher-bg': theme.launcherBg || '#ffffff',
-    '--df-text': theme.textColor || '#141413',
-    '--df-user-bubble': theme.textColor || '#141413',
-  };
+  const themeStyle = themeCssVars(theme);
 
   useEffect(() => {
     return () => {
@@ -238,69 +234,59 @@ export default function ChatWindow({
         </header>
 
         <div className="chat-body" aria-live="polite">
-          {isIdle && (welcomeText || showSuggestionChips) && (
+          {welcomeText ? (
             <motion.div
-              className="chat-idle"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.28, ease: msgEase }}
+              className="chat-row chat-row-bot chat-welcome-row"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.34, ease: msgEase }}
             >
-              {welcomeText && (
-                <motion.div
-                  className="chat-row chat-row-bot"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.34, ease: msgEase }}
-                >
-                  <div className="chat-row-avatar" aria-hidden="true">
-                    <BotIcon iconUrl={iconUrl} accent={accent} size={26} />
-                  </div>
-                  <div className="message-bubble bot-message">
-                    <p className="message-text">{welcomeText}</p>
-                  </div>
-                </motion.div>
-              )}
+              <div className="chat-row-avatar" aria-hidden="true">
+                <BotIcon iconUrl={iconUrl} accent={accent} size={26} />
+              </div>
+              <div className="message-bubble bot-message">
+                <p className="message-text">{welcomeText}</p>
+              </div>
+            </motion.div>
+          ) : null}
 
-              <AnimatePresence>
-                {showSuggestionChips && (
-                  <motion.div
-                    className="chat-suggestions chat-suggestions-below"
+          <AnimatePresence>
+            {showSuggestionChips && (
+              <motion.div
+                className="chat-suggestions chat-suggestions-below"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{
+                  duration: 0.32,
+                  delay: welcomeText ? 0.12 : 0,
+                  ease: msgEase,
+                }}
+              >
+                {chips.map((question, i) => (
+                  <motion.button
+                    key={question.id}
+                    type="button"
+                    className="suggestion-chip"
+                    onClick={() => {
+                      setInputValue(question.text);
+                      inputRef.current?.focus();
+                    }}
+                    disabled={isLoading}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
                     transition={{
-                      duration: 0.32,
-                      delay: welcomeText ? 0.12 : 0,
+                      duration: 0.3,
+                      delay: (welcomeText ? 0.18 : 0.08) + 0.06 * i,
                       ease: msgEase,
                     }}
                   >
-                    {chips.map((question, i) => (
-                      <motion.button
-                        key={question.id}
-                        type="button"
-                        className="suggestion-chip"
-                        onClick={() => {
-                          setInputValue(question.text);
-                          inputRef.current?.focus();
-                        }}
-                        disabled={isLoading}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{
-                          duration: 0.3,
-                          delay: (welcomeText ? 0.18 : 0.08) + 0.06 * i,
-                          ease: msgEase,
-                        }}
-                      >
-                        {question.text}
-                      </motion.button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          )}
+                    {question.text}
+                  </motion.button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {hasConversation && (
             <>
@@ -329,17 +315,35 @@ export default function ChatWindow({
                         <div className="message-sources">
                           <p className="sources-label">{sourcesLabel}</p>
                           <ul>
-                            {message.sources.map((source, idx) => (
-                              <li key={`${source.title}-${idx}`}>
-                                {source.url ? (
-                                  <a href={source.url} target="_blank" rel="noopener noreferrer">
-                                    {source.title}
-                                  </a>
-                                ) : (
-                                  <span>{source.title}</span>
-                                )}
-                              </li>
-                            ))}
+                            {message.sources.map((source, idx) => {
+                              const title = String(source.title || source.label || 'Source').trim() || 'Source';
+                              const url = source.url ? String(source.url) : '';
+                              const inner = (
+                                <>
+                                  <SourceTypeIcon source={source} />
+                                  <span className="df-source-name">{title}</span>
+                                </>
+                              );
+                              return (
+                                <li key={`${title}-${idx}`}>
+                                  {url ? (
+                                    <a
+                                      className="df-source-row"
+                                      href={url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      title={source.label || title}
+                                    >
+                                      {inner}
+                                    </a>
+                                  ) : (
+                                    <span className="df-source-row is-static" title={source.label || title}>
+                                      {inner}
+                                    </span>
+                                  )}
+                                </li>
+                              );
+                            })}
                           </ul>
                         </div>
                       )}

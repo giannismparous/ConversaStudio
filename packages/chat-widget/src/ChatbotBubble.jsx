@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import ChatWindow from './ChatWindow.jsx';
 import DefaultAvatar from './DefaultAvatar.jsx';
 import TypewriterPlaceholder from './TypewriterPlaceholder.jsx';
+import { themeCssVars } from './themeVars.js';
 import './ChatWindow.css';
 
 export default function ChatbotBubble({
@@ -42,12 +43,7 @@ export default function ChatbotBubble({
         ? suggestedQuestions
         : [`Ask ${botName}…`];
 
-  const themeStyle = {
-    '--df-panel-bg': theme.panelBg || '#faf9f5',
-    '--df-accent': accent,
-    '--df-launcher-bg': theme.launcherBg || '#ffffff',
-    '--df-text': theme.textColor || '#141413',
-  };
+  const themeStyle = themeCssVars(theme);
 
   const closeChat = () => {
     setIsClosing(true);

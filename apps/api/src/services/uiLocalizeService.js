@@ -1,13 +1,14 @@
 import {
   normalizeSuggestedQuestions,
+  personalizeUiCopy,
   resolveTestUiCopy,
 } from '@dialogos-forge/core';
 import { getChatModel } from '../config.js';
 
 const cache = new Map();
 
-function cacheKey(language, welcomeMessage, suggestedQuestions) {
-  return `${language}\0${welcomeMessage}\0${JSON.stringify(normalizeSuggestedQuestions(suggestedQuestions))}`;
+function cacheKey(language, welcomeMessage, suggestedQuestions, botName, personaGender) {
+  return `${language}\0${botName}\0${personaGender}\0${welcomeMessage}\0${JSON.stringify(normalizeSuggestedQuestions(suggestedQuestions))}`;
 }
 
 function extractJsonObject(text) {
@@ -27,8 +28,15 @@ export async function localizeBotUiCopy({
   suggestedQuestions,
   language,
   botName = 'Assistant',
+  personaGender = 'neutral',
 }) {
-  const resolved = resolveTestUiCopy({ welcomeMessage, suggestedQuestions, language, botName });
+  const resolved = resolveTestUiCopy({
+    welcomeMessage,
+    suggestedQuestions,
+    language,
+    botName,
+    personaGender,
+  });
   if (resolved) return resolved;
 
   if (language !== 'el') {
@@ -38,12 +46,14 @@ export async function localizeBotUiCopy({
     };
   }
 
-  const key = cacheKey(language, welcomeMessage, suggestedQuestions);
+  const key = cacheKey(language, welcomeMessage, suggestedQuestions, botName, personaGender);
   if (cache.has(key)) return cache.get(key);
 
   const questions = normalizeSuggestedQuestions(suggestedQuestions);
   const welcome = String(welcomeMessage || '').trim();
   const chat = getChatModel();
+  const article =
+    personaGender === 'masculine' ? 'ο' : personaGender === 'feminine' ? 'η' : 'το';
 
   const prompt = [
     'Translate chatbot UI strings to natural modern Greek (Ελληνικά).',
@@ -52,6 +62,7 @@ export async function localizeBotUiCopy({
     '',
     'Rules:',
     `- Keep the bot name "${botName}" unchanged if it appears.`,
+    `- Bot grammatical gender is ${personaGender}. When Greek needs an article before the bot name, ALWAYS use «${article} ${botName}» (e.g. «τι κάνει ${article} ${botName}», «είμαι ${article} ${botName}»). Never use ο/η/το incorrectly.`,
     '- Keep the same number of suggested questions as the input.',
     '- Write concise, natural UI copy suitable for welcome text and suggestion chips.',
     '- Do not add markdown or commentary.',
@@ -63,12 +74,16 @@ export async function localizeBotUiCopy({
 
   const response = await chat.generate({ prompt });
   const parsed = extractJsonObject(response);
-  const result = {
-    welcomeMessage: String(parsed.welcomeMessage || welcome).trim(),
-    suggestedQuestions: normalizeSuggestedQuestions(parsed.suggestedQuestions).length
-      ? normalizeSuggestedQuestions(parsed.suggestedQuestions)
-      : questions,
-  };
+  const result = personalizeUiCopy(
+    {
+      welcomeMessage: String(parsed.welcomeMessage || welcome).trim(),
+      suggestedQuestions: normalizeSuggestedQuestions(parsed.suggestedQuestions).length
+        ? normalizeSuggestedQuestions(parsed.suggestedQuestions)
+        : questions,
+    },
+    botName,
+    personaGender
+  );
 
   cache.set(key, result);
   return result;

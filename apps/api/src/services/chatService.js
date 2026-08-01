@@ -3,7 +3,7 @@ import {
   formatKeyFacts,
   resolveReplyLanguage,
 } from '@dialogos-forge/core';
-import { pool, vectorStore, getEmbedder, getChatModel } from '../config.js';
+import { pool, vectorStore, getEmbedder, getChatModel, objectStore, env } from '../config.js';
 import { buildChatSources } from './sourceCitations.js';
 
 function parseJsonArray(value) {
@@ -19,7 +19,7 @@ function parseJsonArray(value) {
   return [];
 }
 
-export async function answerBotChat(botId, question, { history = [], language } = {}) {
+export async function answerBotChat(botId, question, { history = [] } = {}) {
   const q = String(question || '').trim();
   if (!q) {
     return { answer: 'Type a question to get started.', sources: [], confidence: 0 };
@@ -80,7 +80,9 @@ export async function answerBotChat(botId, question, { history = [], language } 
     .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
     .join('\n');
 
-  const replyLanguage = resolveReplyLanguage(q, language);
+  // Reply language follows the user's message (Greek / Greeklish → el, English → en).
+  // Do not let UI locale force English answers to Greek/Greeklish messages.
+  const replyLanguage = resolveReplyLanguage(q);
 
   const prompt = buildRagPrompt({
     systemPrompt: bot.system_prompt,
@@ -101,6 +103,8 @@ export async function answerBotChat(botId, question, { history = [], language } 
     hits,
     hasKeyFacts,
     sourceCitations: bot.source_citations,
+    publicApiUrl: env.publicApiUrl,
+    objectStore,
   });
 
   const top = hits[0]?.score ?? (hasKeyFacts ? 0.9 : 0);

@@ -6,12 +6,11 @@ function formatRatio(ratio) {
   return `${ratio.toFixed(2)}:1`;
 }
 
-export default function ThemeAccessibility({ theme, onApply }) {
+export default function ThemeAccessibility({ theme, onApply, showAutoFix = true }) {
   const { t } = useI18n();
   const analysis = useMemo(() => analyzeThemeAccessibility(theme), [theme]);
 
   const gradeLabel = t(`editor.a11y.grade.${analysis.grade}`);
-  const canAutoFix = analysis.failing.length > 0;
 
   return (
     <div className="theme-a11y" aria-live="polite">
@@ -24,7 +23,7 @@ export default function ThemeAccessibility({ theme, onApply }) {
           <span className="theme-a11y-score-max">/100</span>
         </div>
         <span className="theme-a11y-grade">{gradeLabel}</span>
-        {canAutoFix && (
+        {showAutoFix ? (
           <button
             type="button"
             className="btn btn-secondary theme-a11y-fix-btn"
@@ -32,7 +31,7 @@ export default function ThemeAccessibility({ theme, onApply }) {
           >
             {t('editor.a11y.autoFix')}
           </button>
-        )}
+        ) : null}
       </div>
 
       <ul className="theme-a11y-checks">

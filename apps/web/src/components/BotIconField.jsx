@@ -16,7 +16,6 @@ export default function BotIconField({
   const localUrlRef = useRef(null);
   const [cropFile, setCropFile] = useState(null);
   const [displayUrl, setDisplayUrl] = useState(iconUrl || '');
-  const [visible, setVisible] = useState(Boolean(iconUrl));
 
   const clearLocalPreview = () => {
     if (localUrlRef.current) {
@@ -27,32 +26,17 @@ export default function BotIconField({
 
   useEffect(() => {
     if (!iconUrl) {
-      if (!localUrlRef.current) {
-        setDisplayUrl('');
-        setVisible(false);
-      }
+      if (!localUrlRef.current) setDisplayUrl('');
       return undefined;
     }
 
-    let cancelled = false;
-    const img = new Image();
-    img.decoding = 'async';
-    img.onload = () => {
-      if (cancelled) return;
-      setDisplayUrl(iconUrl);
-      setVisible(true);
+    // Remote icon arrived after upload — drop the temporary blob preview.
+    if (localUrlRef.current) {
       clearLocalPreview();
-      onPreviewChange?.(null);
-    };
-    img.onerror = () => {
-      if (cancelled) return;
-      // Keep local preview if remote fails to load.
-      if (!localUrlRef.current) setVisible(false);
-    };
-    img.src = iconUrl;
-    return () => {
-      cancelled = true;
-    };
+      onPreviewChange?.(iconUrl);
+    }
+    setDisplayUrl(iconUrl);
+    return undefined;
   }, [iconUrl, onPreviewChange]);
 
   useEffect(
@@ -81,17 +65,19 @@ export default function BotIconField({
     const preview = URL.createObjectURL(blob);
     localUrlRef.current = preview;
     setDisplayUrl(preview);
-    setVisible(true);
     onPreviewChange?.(preview);
 
     const file = new File([blob], 'icon.png', { type: 'image/png' });
-    await onUpload(file);
+    try {
+      await onUpload(file);
+    } catch {
+      /* parent surfaces error; keep local preview */
+    }
   };
 
   const handleRemove = async () => {
     clearLocalPreview();
     setDisplayUrl('');
-    setVisible(false);
     onPreviewChange?.(null);
     await onRemove();
   };
@@ -102,17 +88,12 @@ export default function BotIconField({
       <div className="bot-icon-row">
         <div
           className={`bot-icon-preview${uploading ? ' is-uploading' : ''}${
-            visible && hasCustom ? ' has-image' : ''
+            hasCustom ? ' has-image' : ''
           }`}
           aria-hidden="true"
         >
           {hasCustom ? (
-            <img
-              src={displayUrl}
-              alt=""
-              className={`bot-icon-img${visible ? ' is-ready' : ''}`}
-              decoding="async"
-            />
+            <img src={displayUrl} alt="" className="bot-icon-img is-ready" decoding="async" />
           ) : (
             <DefaultAvatar size={72} accent={accent} />
           )}
