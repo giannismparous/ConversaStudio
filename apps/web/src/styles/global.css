@@ -894,18 +894,20 @@ select {
 }
 
 .bots-invite {
-  max-width: 28rem;
+  max-width: min(42rem, 100%);
   animation: app-loading-in 0.45s ease;
+  text-align: center;
 }
 
 .bots-invite-title {
   margin: 0 0 1.35rem;
   font-family: var(--display);
-  font-size: clamp(1.85rem, 4vw, 2.45rem);
+  font-size: clamp(1.15rem, 5vw, 2.35rem);
   font-weight: 400;
   letter-spacing: -0.04em;
-  line-height: 1.15;
+  line-height: 1.2;
   color: var(--ink);
+  white-space: nowrap;
 }
 
 .bots-invite-cta {
