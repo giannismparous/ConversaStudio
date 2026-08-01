@@ -4894,20 +4894,27 @@ a.btn.btn-outline:hover {
 
 .wizard-build-live-title {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 0.18rem 0.28rem;
-  margin: 0;
+  column-gap: 0.42rem;
+  row-gap: 0.2rem;
+  margin: 0 auto;
   text-align: center;
-  max-width: none;
+  max-width: min(100%, 38rem);
+  padding-inline: 0.35rem;
   font-size: clamp(1.85rem, 4.2vw, 2.55rem);
-  line-height: 1.12;
+  line-height: 1.2;
   letter-spacing: -0.04em;
+  box-sizing: border-box;
 }
 
 .wizard-build-live-label {
   letter-spacing: -0.04em;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  text-wrap: balance;
 }
 
 .wizard-build:not(.is-building) .wizard-title {
@@ -4923,15 +4930,22 @@ a.btn.btn-outline:hover {
 .wizard-build-inline-dots {
   display: inline-flex;
   align-items: center;
-  gap: 0.28rem;
-  margin-left: 0.18rem;
-  min-width: 1.6rem;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  width: 1.95rem;
+  min-width: 1.95rem;
+  height: 0.55rem;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+  transform: translateY(0.06em);
 }
 
 .wizard-build-dots span,
 .wizard-build-inline-dots span {
   width: 0.34rem;
   height: 0.34rem;
+  flex: 0 0 auto;
   border-radius: 50%;
   background: currentColor;
   opacity: 0.25;
@@ -4949,8 +4963,12 @@ a.btn.btn-outline:hover {
 }
 
 .wizard-build-inline-dots {
-  margin-left: 0.45rem;
+  width: 1.45rem;
+  min-width: 1.45rem;
+  height: 0.4rem;
+  margin-left: 0.4rem;
   vertical-align: middle;
+  transform: translateY(0.02em);
 }
 
 .wizard-build-inline-dots span {
@@ -5063,18 +5081,23 @@ a.btn.btn-outline:hover {
 
 .wizard-build-log-text {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
+  column-gap: 0.35rem;
+  row-gap: 0.1rem;
   font-size: clamp(1.08rem, 2.4vw, 1.28rem);
-  line-height: 1.4;
+  line-height: 1.45;
   letter-spacing: -0.015em;
   color: color-mix(in srgb, var(--ink, #1a1a1a) 48%, transparent);
+  min-width: 0;
   transition:
     color 0.4s ease,
     opacity 0.4s ease;
 }
 
 .wizard-build-log-copy {
+  flex: 0 1 auto;
+  min-width: 0;
   transition: opacity 0.35s ease;
 }
 

@@ -5,15 +5,17 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { useI18n } from '../lib/i18n.jsx';
 import {
+  englishFallbackUiCopy,
   greekFallbackUiCopy,
   normalizeSuggestedQuestions,
   personalizeUiCopy,
+  personalizeEnglishUiCopy,
   resolveTestUiCopy,
 } from '../lib/testUiLocalize.js';
 
 const EMPTY_UI = { welcomeMessage: '', suggestedQuestions: [] };
 
-/** Instant copy only — returns null when Greek needs a translate API call. */
+/** Instant copy only — returns null when the wrong language needs a translate API call. */
 function uiCopyForBot(bot, language, botName) {
   const questions = normalizeSuggestedQuestions(bot.suggestedQuestions);
   const gender = bot.personaGender || 'neutral';
@@ -24,6 +26,12 @@ function uiCopyForBot(bot, language, botName) {
     botName,
     personaGender: gender,
   });
+}
+
+function fallbackUiCopy(bot, language) {
+  const name = bot?.name || 'DialogosAI';
+  const gender = bot?.personaGender || 'neutral';
+  return language === 'el' ? greekFallbackUiCopy(name, gender) : englishFallbackUiCopy(name);
 }
 
 export default function BotTestPage() {
@@ -79,41 +87,30 @@ export default function BotTestPage() {
       return undefined;
     }
 
-    if (testLanguage === 'en') {
-      applyCopy({
-        welcomeMessage: bot.welcomeMessage,
-        suggestedQuestions: normalizeSuggestedQuestions(bot.suggestedQuestions),
-      });
-      setUiLoading(false);
-      setUiError('');
-      return undefined;
-    }
-
-    // Greek + custom English UI copy → translate (never leave English on screen).
+    // Stored copy is the wrong language — translate (EL↔EN).
     setUiLoading(true);
     setUiError('');
-    applyCopy(greekFallbackUiCopy(bot.name, gender));
+    applyCopy(fallbackUiCopy(bot, testLanguage));
     api(`/bots/${bot.id}/localize-ui`, {
       method: 'POST',
       username,
-      body: { language: 'el' },
+      body: { language: testLanguage },
     })
       .then((data) => {
+        const raw = {
+          welcomeMessage: data.welcomeMessage,
+          suggestedQuestions: data.suggestedQuestions,
+        };
         applyCopy(
-          personalizeUiCopy(
-            {
-              welcomeMessage: data.welcomeMessage,
-              suggestedQuestions: data.suggestedQuestions,
-            },
-            bot.name,
-            gender
-          )
+          testLanguage === 'el'
+            ? personalizeUiCopy(raw, bot.name, gender)
+            : personalizeEnglishUiCopy(raw, bot.name)
         );
       })
       .catch((err) => {
         if (!cancelled) {
           setUiError(err.message || t('test.translateError'));
-          applyCopy(greekFallbackUiCopy(bot.name, gender));
+          applyCopy(fallbackUiCopy(bot, testLanguage));
         }
       })
       .finally(() => {
@@ -133,10 +130,7 @@ export default function BotTestPage() {
     (language) => {
       if (!bot || language === testLanguage) return;
       const instant = uiCopyForBot(bot, language, bot.name);
-      if (instant) setUiCopy(instant);
-      else if (language === 'el') {
-        setUiCopy(greekFallbackUiCopy(bot.name, bot.personaGender || 'neutral'));
-      }
+      setUiCopy(instant || fallbackUiCopy(bot, language));
       setTestLanguage(language);
       setResetSignal((value) => value + 1);
     },
@@ -150,7 +144,7 @@ export default function BotTestPage() {
       <div className="topbar bot-test-topbar" style={{ marginBottom: '1rem' }}>
         <div>
           <h2 className="section-title">{t('test.title', { name: bot?.name || '…' })}</h2>
-          {uiLoading && testLanguage === 'el' && (
+          {uiLoading && (
             <p className="muted" style={{ margin: 0 }}>
               {t('test.translating')}
             </p>
@@ -164,6 +158,7 @@ export default function BotTestPage() {
                 type="button"
                 className={`mode-chip${testLanguage === 'en' ? ' active' : ''}`}
                 onClick={() => switchLanguage('en')}
+                disabled={uiLoading}
               >
                 {t('common.english')}
               </button>

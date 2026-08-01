@@ -146,7 +146,30 @@ export function greekFallbackUiCopy(botName, personaGender = 'neutral') {
   );
 }
 
-/** Instant UI copy for test mode — no API required for Dialogos defaults / already-Greek. */
+/** English name swap only — no Greek article grammar. */
+export function personalizeEnglishUiCopy(copy, botName) {
+  const name = String(botName || '').trim() || 'DialogosAI';
+  const swap = (text) => String(text || '').split('DialogosAI').join(name);
+  return {
+    welcomeMessage: swap(copy.welcomeMessage),
+    suggestedQuestions: (copy.suggestedQuestions || []).map(swap),
+  };
+}
+
+export function englishFallbackUiCopy(botName) {
+  return personalizeEnglishUiCopy(
+    {
+      welcomeMessage: DIALOGOS_WELCOME_EN,
+      suggestedQuestions: [...DIALOGOS_QUESTIONS_EN],
+    },
+    botName
+  );
+}
+
+/**
+ * Instant UI copy for test mode.
+ * Returns null when the stored copy is the wrong language and needs a live translate.
+ */
 export function resolveTestUiCopy({
   welcomeMessage,
   suggestedQuestions,
@@ -157,13 +180,28 @@ export function resolveTestUiCopy({
   const welcome = String(welcomeMessage || '').trim();
   const questions = normalizeSuggestedQuestions(suggestedQuestions);
   const name = String(botName || '').trim() || 'DialogosAI';
+  const isDefault =
+    !welcome ||
+    matchesDialogosDefaults(welcome, questions, name) ||
+    matchesDialogosWelcome(welcome, name);
 
   if (language === 'en') {
-    return personalizeUiCopy(
-      { welcomeMessage: welcome, suggestedQuestions: questions },
-      name,
-      personaGender
-    );
+    // Already English — show as-is (name-personalized).
+    if (welcome && !looksGreek(welcome)) {
+      const enQuestions = questions.some((q) => looksGreek(q))
+        ? [...DIALOGOS_QUESTIONS_EN]
+        : questions;
+      return personalizeEnglishUiCopy(
+        { welcomeMessage: welcome, suggestedQuestions: enQuestions },
+        name
+      );
+    }
+    // Greek Dialogos defaults (or empty) → English defaults instantly.
+    if (isDefault) {
+      return englishFallbackUiCopy(name);
+    }
+    // Custom Greek copy → translate via API.
+    return null;
   }
 
   if (language !== 'el') return null;
@@ -179,7 +217,7 @@ export function resolveTestUiCopy({
     );
   }
 
-  if (matchesDialogosDefaults(welcome, questions, name) || matchesDialogosWelcome(welcome, name)) {
+  if (isDefault) {
     return personalizeUiCopy(
       {
         welcomeMessage: DIALOGOS_WELCOME_EL,

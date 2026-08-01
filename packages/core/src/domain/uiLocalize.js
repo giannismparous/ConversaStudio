@@ -162,9 +162,29 @@ export function greekFallbackUiCopy(botName, personaGender = 'neutral') {
   );
 }
 
+/** English name swap only — no Greek article grammar. */
+export function personalizeEnglishUiCopy(copy, botName) {
+  const name = String(botName || '').trim() || 'DialogosAI';
+  const swap = (text) => String(text || '').split('DialogosAI').join(name);
+  return {
+    welcomeMessage: swap(copy.welcomeMessage),
+    suggestedQuestions: (copy.suggestedQuestions || []).map(swap),
+  };
+}
+
+export function englishFallbackUiCopy(botName) {
+  return personalizeEnglishUiCopy(
+    {
+      welcomeMessage: DIALOGOS_DEFAULTS.welcomeMessage,
+      suggestedQuestions: [...DIALOGOS_DEFAULTS.suggestedQuestions],
+    },
+    botName
+  );
+}
+
 /**
  * Instant UI copy for test / preview.
- * Returns null only when Greek needs a live translation of custom English copy.
+ * Returns null when stored copy is the wrong language and needs a live translate.
  */
 export function resolveTestUiCopy({
   welcomeMessage,
@@ -176,13 +196,25 @@ export function resolveTestUiCopy({
   const questions = normalizeSuggestedQuestions(suggestedQuestions);
   const welcome = String(welcomeMessage || '').trim();
   const name = String(botName || '').trim() || 'DialogosAI';
+  const isDefault =
+    !welcome ||
+    matchesDialogosDefaults(welcome, questions, name) ||
+    matchesDialogosWelcome(welcome, name);
 
   if (language === 'en') {
-    return personalizeUiCopy(
-      { welcomeMessage: welcome, suggestedQuestions: questions },
-      name,
-      personaGender
-    );
+    if (welcome && !looksGreek(welcome)) {
+      const enQuestions = questions.some((q) => looksGreek(q))
+        ? [...DIALOGOS_DEFAULTS.suggestedQuestions]
+        : questions;
+      return personalizeEnglishUiCopy(
+        { welcomeMessage: welcome, suggestedQuestions: enQuestions },
+        name
+      );
+    }
+    if (isDefault) {
+      return englishFallbackUiCopy(name);
+    }
+    return null;
   }
 
   if (language !== 'el') return null;
@@ -200,7 +232,7 @@ export function resolveTestUiCopy({
   }
 
   // Dialogos default templates (full or welcome-only) → canned Greek.
-  if (matchesDialogosDefaults(welcome, questions, name) || matchesDialogosWelcome(welcome, name)) {
+  if (isDefault) {
     return personalizeUiCopy(
       {
         welcomeMessage: DIALOGOS_DEFAULTS_EL.welcomeMessage,
