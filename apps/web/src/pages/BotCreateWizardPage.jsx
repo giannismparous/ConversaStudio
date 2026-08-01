@@ -1976,7 +1976,10 @@ export default function BotCreateWizardPage() {
     setPreviewLoadingId(source.id);
     setPreview({ source, kind: 'loading' });
     try {
-      const next = await buildSourcePreview(source);
+      const next = await buildSourcePreview(source, {
+        botId: botIdRef.current || bot?.id,
+        username,
+      });
       setPreview(next);
     } catch (err) {
       setPreview(null);
@@ -2798,7 +2801,8 @@ export default function BotCreateWizardPage() {
                     }}
                   >
                     {uploading ? (
-                      <p className="muted" style={{ margin: 0 }}>
+                      <p className="muted busy-line" style={{ margin: 0 }}>
+                        <span className="spinner" aria-hidden="true" />
                         {t('editor.uploading')}
                       </p>
                     ) : (
@@ -3125,7 +3129,19 @@ export default function BotCreateWizardPage() {
           </div>
         )}
       </div>
-      <SourcePreviewModal preview={preview} onClose={() => setPreview(null)} />
+      <SourcePreviewModal
+        preview={preview}
+        onClose={() => {
+          if (preview?.objectUrl && preview?.url) {
+            try {
+              URL.revokeObjectURL(preview.url);
+            } catch {
+              /* ignore */
+            }
+          }
+          setPreview(null);
+        }}
+      />
       {dialog}
     </div>
   );

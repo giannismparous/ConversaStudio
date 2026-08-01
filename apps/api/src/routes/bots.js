@@ -799,6 +799,48 @@ export default async function botRoutes(fastify) {
     return { ok: true, chunkCount: countRows[0]?.chunk_count || 0 };
   });
 
+  /** Authenticated file bytes for PDF/TXT preview (works with local + Supabase storage). */
+  fastify.get('/bots/:id/sources/:sourceId/content', async (request, reply) => {
+    const bot = await requireBotOwner(request, reply, request.params.id);
+    if (!bot) return;
+
+    const { rows } = await pool.query(
+      'SELECT * FROM sources WHERE id = $1 AND bot_id = $2',
+      [request.params.sourceId, bot.id]
+    );
+    const source = rows[0];
+    if (!source) return reply.code(404).send({ error: 'source_not_found' });
+    if (!['pdf', 'txt', 'text'].includes(source.type)) {
+      return reply.code(400).send({ error: 'preview_unsupported' });
+    }
+
+    const uri = String(source.uri || '');
+    if (!uri.startsWith('/files/')) {
+      return reply.code(400).send({ error: 'preview_unsupported' });
+    }
+
+    const key = uri.slice('/files/'.length);
+    try {
+      const buf = await objectStore.get(key);
+      const type =
+        source.type === 'pdf'
+          ? 'application/pdf'
+          : 'text/plain; charset=utf-8';
+      reply.header('Content-Type', type);
+      reply.header('Cache-Control', 'private, max-age=60');
+      reply.header(
+        'Content-Disposition',
+        `inline; filename="${encodeURIComponent(source.label || 'file')}"`
+      );
+      return reply.send(buf);
+    } catch (err) {
+      return reply.code(404).send({
+        error: 'file_missing',
+        message: err.message || 'File not found in storage',
+      });
+    }
+  });
+
   fastify.post('/bots/:id/icon', async (request, reply) => {
     const bot = await requireBotOwner(request, reply, request.params.id);
     if (!bot) return;

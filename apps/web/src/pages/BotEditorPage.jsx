@@ -1207,7 +1207,7 @@ export default function BotEditorPage() {
     setError('');
     setPreview({ source, kind: 'loading' });
     try {
-      const next = await buildSourcePreview(source);
+      const next = await buildSourcePreview(source, { botId: bot.id, username });
       setPreview(next);
     } catch (err) {
       setPreview(null);
@@ -2075,7 +2075,21 @@ export default function BotEditorPage() {
         )}
       </div>
 
-      {preview ? <SourcePreviewModal preview={preview} onClose={() => setPreview(null)} /> : null}
+      {preview ? (
+        <SourcePreviewModal
+          preview={preview}
+          onClose={() => {
+            if (preview?.objectUrl && preview?.url) {
+              try {
+                URL.revokeObjectURL(preview.url);
+              } catch {
+                /* ignore */
+              }
+            }
+            setPreview(null);
+          }}
+        />
+      ) : null}
 
       {dialog}
       {blocker.state === 'blocked' && leavePromptKind === 'unsaved' && (

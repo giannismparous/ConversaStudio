@@ -7,6 +7,7 @@ import { useI18n } from '../lib/i18n.jsx';
 import {
   englishFallbackUiCopy,
   greekFallbackUiCopy,
+  looksGreek,
   normalizeSuggestedQuestions,
   personalizeUiCopy,
   personalizeEnglishUiCopy,
@@ -71,12 +72,20 @@ export default function BotTestPage() {
     const gender = bot.personaGender || 'neutral';
 
     const applyCopy = (copy) => {
-      if (!cancelled) {
-        setUiCopy({
-          welcomeMessage: copy.welcomeMessage || '',
-          suggestedQuestions: copy.suggestedQuestions || [],
-        });
+      if (cancelled) return;
+      let welcomeMessage = copy.welcomeMessage || '';
+      let suggestedQuestions = copy.suggestedQuestions || [];
+      // Never leave the wrong script on screen after a language switch.
+      if (testLanguage === 'en' && looksGreek(welcomeMessage)) {
+        const fb = englishFallbackUiCopy(bot.name);
+        welcomeMessage = fb.welcomeMessage;
+        suggestedQuestions = fb.suggestedQuestions;
+      } else if (testLanguage === 'el' && welcomeMessage && !looksGreek(welcomeMessage)) {
+        const fb = greekFallbackUiCopy(bot.name, gender);
+        welcomeMessage = fb.welcomeMessage;
+        suggestedQuestions = fb.suggestedQuestions;
       }
+      setUiCopy({ welcomeMessage, suggestedQuestions });
     };
 
     const instant = uiCopyForBot(bot, testLanguage, bot.name);

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { DefaultAvatar } from '@dialogos-forge/chat-widget';
 import { useI18n } from '../lib/i18n.jsx';
 import {
+  englishFallbackUiCopy,
   greekFallbackUiCopy,
   normalizeSuggestedQuestions,
   resolveTestUiCopy,
@@ -56,11 +57,10 @@ export default function ThemePreview({
       personaGender,
     });
     if (instant) return instant;
-    if (language === 'el') return greekFallbackUiCopy(displayName, personaGender);
-    return {
-      welcomeMessage: String(welcomeMessage || '').trim(),
-      suggestedQuestions: questions,
-    };
+    // Wrong-language stored copy: never keep Greek on English (or vice versa).
+    return language === 'el'
+      ? greekFallbackUiCopy(displayName, personaGender)
+      : englishFallbackUiCopy(displayName);
   }, [locale, welcomeMessage, suggestedQuestions, displayName, personaGender]);
 
   const welcomeRaw =

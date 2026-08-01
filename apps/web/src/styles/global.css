@@ -1914,8 +1914,41 @@ a.btn.btn-outline:hover {
 }
 
 .dropzone.is-busy {
+  position: relative;
+  overflow: hidden;
   border-style: solid;
   color: var(--ink);
+  background: color-mix(in srgb, var(--accent, #c45f2f) 6%, #fffdf8);
+}
+
+.dropzone.is-busy::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    color-mix(in srgb, var(--accent, #c45f2f) 14%, transparent) 45%,
+    transparent 90%
+  );
+  transform: translateX(-120%);
+  animation: dropzone-shimmer 1.35s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.dropzone.is-busy .busy-line {
+  position: relative;
+  z-index: 1;
+  justify-content: center;
+}
+
+@keyframes dropzone-shimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
 }
 
 .chunks-browser {
