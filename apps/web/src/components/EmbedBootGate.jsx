@@ -1,8 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth.jsx';
-import AppLoading from './AppLoading.jsx';
-
-const EMBED_MIN_MS = 720;
 
 function isEmbed() {
   return (
@@ -11,27 +8,34 @@ function isEmbed() {
   );
 }
 
+function notifyFlowEmbedReady() {
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'simasia-embed-ready', product: 'dialogos' }, '*');
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
- * Inside fλow, hold the Metron-style boot screen briefly so opening Dialogos
- * does not flash the login form the way a cold Supabase session otherwise would.
+ * Inside fλow, stay quiet while the shell shows the only branded boot.
+ * Signal ready once auth has settled so fλow can uncover the iframe.
  */
 export default function EmbedBootGate({ children }) {
   const embed = isEmbed();
   const { ready } = useAuth();
-  const [minDone, setMinDone] = useState(!embed);
+  const [posted, setPosted] = useState(false);
 
   useEffect(() => {
-    if (!embed) {
-      setMinDone(true);
-      return undefined;
-    }
-    setMinDone(false);
-    const id = window.setTimeout(() => setMinDone(true), EMBED_MIN_MS);
-    return () => window.clearTimeout(id);
-  }, [embed]);
+    if (!embed || !ready || posted) return;
+    notifyFlowEmbedReady();
+    setPosted(true);
+  }, [embed, ready, posted]);
 
-  if (embed && (!ready || !minDone)) {
-    return <AppLoading />;
+  // fλow owns the visible loader — avoid a second Dialogos boot flash.
+  if (embed && !ready) {
+    return <div className="boot-wrap" aria-busy="true" />;
   }
 
   return children;
