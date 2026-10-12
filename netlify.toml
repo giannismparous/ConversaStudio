@@ -4,8 +4,49 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  VITE_BASE = "/dialogos/"
+  VITE_FLOW_ORIGIN = "https://simasiaai-flow.netlify.app"
 
+# Shared SimasiaAI theme lives on fλow; proxy when Dialogos is hit directly.
+[[redirects]]
+  from = "/theme/*"
+  to = "https://simasiaai-flow.netlify.app/theme/:splat"
+  status = 200
+  force = true
+
+# Served under fλow at /dialogos/ (Vite base). Map path back to publish root.
+[[redirects]]
+  from = "/dialogos"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/dialogos/"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/dialogos/*"
+  to = "/:splat"
+  status = 200
+
+# Bare site root → fλow (product lives under the shell).
+[[redirects]]
+  from = "/"
+  to = "https://simasiaai-flow.netlify.app/"
+  status = 302
+  force = true
+
+# SPA fallback
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+# frame-ancestors 'self' so fλow can embed /dialogos in its product rail.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Content-Security-Policy = "frame-ancestors 'self'"
+    Referrer-Policy = "no-referrer"
