@@ -43,10 +43,11 @@
   to = "/index.html"
   status = 200
 
-# frame-ancestors 'self' so fλow can embed /dialogos in its product rail.
+# Allow fλow (HermesView team) to iframe this site. Same-origin Netlify proxy
+# across teams 500s, so the shell embeds conversastudio.netlify.app cross-origin.
 [[headers]]
   for = "/*"
   [headers.values]
     X-Content-Type-Options = "nosniff"
-    Content-Security-Policy = "frame-ancestors 'self'"
+    Content-Security-Policy = "frame-ancestors 'self' https://simasiaai-flow.netlify.app https://*.netlify.app"
     Referrer-Policy = "no-referrer"
