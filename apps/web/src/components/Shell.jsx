@@ -13,7 +13,7 @@ export default function Shell() {
     new URLSearchParams(window.location.search).get('embed') === '1';
 
   return (
-    <div className={`app-shell${embed ? ' is-embed' : ''}`}>
+    <div className={`app-shell product-shell-dialogos${embed ? ' is-embed' : ''}`}>
       {!embed ? (
         <header className="shell-bar">
           <Link to="/bots" className="brand">

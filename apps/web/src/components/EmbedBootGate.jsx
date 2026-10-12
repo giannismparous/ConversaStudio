@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth.jsx';
 import AppLoading from './AppLoading.jsx';
 
-const EMBED_MIN_MS = 650;
+const EMBED_MIN_MS = 720;
 
 function isEmbed() {
   return (
