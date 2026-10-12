@@ -364,9 +364,10 @@ export default function BotsPage() {
       )}
 
       {loading && (
-        <div className="bots-loading">
-          <span className="app-loading-spinner" aria-hidden="true" />
-          <span className="muted">{t('common.loading')}</span>
+        <div className="bots-loading" aria-busy="true">
+          <span className="spinner spinner-md" role="status" aria-label={t('common.loading')}>
+            <span className="sr-only">{t('common.loading')}</span>
+          </span>
         </div>
       )}
 
