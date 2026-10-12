@@ -4,13 +4,16 @@ import { RouterProvider } from 'react-router-dom';
 import { router } from './routes.jsx';
 import { AuthProvider } from './lib/auth.jsx';
 import { LocaleProvider } from './lib/i18n.jsx';
+import EmbedBootGate from './components/EmbedBootGate.jsx';
 import './styles/global.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <LocaleProvider>
       <AuthProvider>
-        <RouterProvider router={router} />
+        <EmbedBootGate>
+          <RouterProvider router={router} />
+        </EmbedBootGate>
       </AuthProvider>
     </LocaleProvider>
   </React.StrictMode>
