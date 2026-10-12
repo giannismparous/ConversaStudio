@@ -32,29 +32,34 @@ function RequireUser() {
   return <Outlet />;
 }
 
-export const router = createBrowserRouter([
-  {
-    element: <AppRoot />,
-    children: [
-      { path: '/login', element: <LoginPage /> },
-      {
-        path: '/',
-        element: <RequireUser />,
-        children: [
-          {
-            element: <Shell />,
-            children: [
-              { index: true, element: <Navigate to="/bots" replace /> },
-              { path: 'bots', element: <BotsPage /> },
-              { path: 'bots/new', element: <BotCreateWizardPage /> },
-              { path: 'bots/:id', element: <BotEditorPage /> },
-              { path: 'bots/:id/test', element: <BotTestPage /> },
-            ],
-          },
-        ],
-      },
-      { path: '/embed-demo/:id', element: <EmbedDemoPage /> },
-      { path: '*', element: <Navigate to="/" replace /> },
-    ],
-  },
-]);
+const basename = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || '/';
+
+export const router = createBrowserRouter(
+  [
+    {
+      element: <AppRoot />,
+      children: [
+        { path: '/login', element: <LoginPage /> },
+        {
+          path: '/',
+          element: <RequireUser />,
+          children: [
+            {
+              element: <Shell />,
+              children: [
+                { index: true, element: <Navigate to="/bots" replace /> },
+                { path: 'bots', element: <BotsPage /> },
+                { path: 'bots/new', element: <BotCreateWizardPage /> },
+                { path: 'bots/:id', element: <BotEditorPage /> },
+                { path: 'bots/:id/test', element: <BotTestPage /> },
+              ],
+            },
+          ],
+        },
+        { path: '/embed-demo/:id', element: <EmbedDemoPage /> },
+        { path: '*', element: <Navigate to="/" replace /> },
+      ],
+    },
+  ],
+  { basename: basename === '/' ? undefined : basename }
+);
