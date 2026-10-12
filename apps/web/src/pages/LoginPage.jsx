@@ -7,10 +7,16 @@ import LanguageSwitcherIcon from '../components/LanguageSwitcherIcon.jsx';
 import AppBrand from '../components/AppBrand.jsx';
 import AppLoading from '../components/AppLoading.jsx';
 
+function isEmbed() {
+  return (
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('embed') === '1'
+  );
+}
+
 export default function LoginPage() {
   const {
     ready,
-    username,
     user,
     login,
     loginWithEmail,
@@ -19,6 +25,7 @@ export default function LoginPage() {
     clearAuthError,
   } = useAuth();
   const { t } = useI18n();
+  const embed = isEmbed();
   const [value, setValue] = useState(() =>
     isSupabaseAuth ? '' : localStorage.getItem('df_username') || ''
   );
@@ -29,7 +36,7 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   if (!ready) return <AppLoading />;
-  if (user) return <Navigate to="/bots" replace />;
+  if (user) return <Navigate to={embed ? '/bots?embed=1' : '/bots'} replace />;
 
   const submitDev = async (e) => {
     e.preventDefault();
@@ -65,24 +72,26 @@ export default function LoginPage() {
   const shownError = error || authError;
 
   return (
-    <div className="login-page">
+    <div className={`boot-wrap login-boot${embed ? ' is-embed' : ''}`}>
       <form
-        className="card login-card"
+        className="boot-panel login-panel"
         onSubmit={isSupabaseAuth ? submitSupabase : submitDev}
       >
-        <div className="login-card-top">
-          <h1 className="brand">
+        <div className="login-panel-head">
+          <h1 className="brand brand-lg">
             <AppBrand />
           </h1>
           <LanguageSwitcherIcon />
         </div>
-        <p>{isSupabaseAuth ? t('login.taglineOnline') : t('login.tagline')}</p>
+        <p className="login-tagline">
+          {isSupabaseAuth ? t('login.taglineOnline') : t('login.tagline')}
+        </p>
 
-        {shownError && (
+        {shownError ? (
           <div className="login-error" role="alert">
             {shownError}
           </div>
-        )}
+        ) : null}
 
         {isSupabaseAuth ? (
           <>
@@ -120,7 +129,7 @@ export default function LoginPage() {
               />
             </div>
             <button
-              className="btn btn-accent"
+              className="btn"
               type="submit"
               disabled={submitting || !email.trim() || !password}
             >
@@ -161,7 +170,7 @@ export default function LoginPage() {
               />
             </div>
             <button
-              className="btn btn-accent"
+              className="btn"
               type="submit"
               disabled={submitting || !value.trim()}
             >
